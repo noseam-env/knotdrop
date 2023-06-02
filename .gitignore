@@ -1,0 +1,23 @@
+# C++ build directories
+/build
+/cmake-build-**
+
+# C++ IDE files and directories
+.vscode/
+.idea/
+*.sdf
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.opensdf
+
+# C++ generated files
+Makefile
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# Other
+*.log
+*.swp
