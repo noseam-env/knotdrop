@@ -135,7 +135,7 @@ void flowdrop::receive(const std::string &dest, const sendAskCallback &callback)
         json j;
         try {
             j = json::parse(req->Body());
-        } catch (const std::exception &ex) {
+        } catch (const std::exception &) {
             if (flowdrop::debug) {
                 std::cout << "ask_invalid_json: " << req->Host() << std::endl;
             }

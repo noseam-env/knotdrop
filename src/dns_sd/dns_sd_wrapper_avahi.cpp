@@ -5,8 +5,10 @@
  * https://github.com/FlowDrop/libflowdrop/blob/master/LEGAL
  */
 
-#ifdef __linux__
+#if defined(USE_AVAHI_DNS_SD)
 
 #include "dns_sd_wrapper.hpp"
 
-#endif  // __linux__
+// TODO: avahi dns sd (not avahi-compat-libdns_sd)
+
+#endif  // USE_AVAHI_DNS_SD

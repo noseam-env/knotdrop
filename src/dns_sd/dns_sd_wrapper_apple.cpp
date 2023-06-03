@@ -5,7 +5,7 @@
  * https://github.com/FlowDrop/libflowdrop/blob/master/LEGAL
  */
 
-#if defined(_WIN32) || defined(__APPLE__)
+#if defined(USE_APPLE_DNS_SD)
 
 #include <dns_sd.h>
 #include <iostream>
@@ -18,7 +18,7 @@
 
 #include <winsock.h>
 
-#elif defined(__APPLE__)
+#else
 
 #include <sys/select.h>
 #include <unistd.h>
@@ -218,4 +218,4 @@ void resolveService(const char *serviceName, const char *regType, const char *do
     DNSServiceRefDeallocate(sdRef);
 }
 
-#endif  // _WIN32 || __APPLE__
+#endif  // USE_APPLE_DNS_SD

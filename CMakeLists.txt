@@ -9,33 +9,38 @@ project(libflowdrop)
 
 option(LIBFLOWDROP_BUILD_STATIC "BUILD STATIC LIBRARIES" ON)
 option(LIBFLOWDROP_BUILD_SHARED "BUILD SHARED LIBRARIES" ON)
+option(USE_APPLE_DNS_SD "USE APPLE DNS_SD" ON)
 
 cmake_policy(SET CMP0077 NEW)
 
 set(CMAKE_CXX_STANDARD 17)
 
-if (WIN32)
-    set(BONJOUR_SDK_HOME "$ENV{BONJOUR_SDK_HOME}")
-    if (NOT BONJOUR_SDK_HOME)
-        message(FATAL_ERROR "BONJOUR_SDK_HOME is not defined")
-    endif ()
-    set(DNSSD_INCLUDE_DIR "${BONJOUR_SDK_HOME}/Include")
-    if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set(DNSSD_LIBRARY "${BONJOUR_SDK_HOME}/Lib/x64/dnssd.lib")
+if (USE_APPLE_DNS_SD)
+    if (WIN32)
+        set(BONJOUR_SDK_HOME "$ENV{BONJOUR_SDK_HOME}")
+        if (NOT BONJOUR_SDK_HOME)
+            message(FATAL_ERROR "BONJOUR_SDK_HOME is not defined")
+        endif ()
+        set(DNSSD_INCLUDE_DIR "${BONJOUR_SDK_HOME}/Include")
+        # TODO: ARM support
+        if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+            set(DNSSD_LIBRARY "${BONJOUR_SDK_HOME}/Lib/x64/dnssd.lib")
+        else ()
+            set(DNSSD_LIBRARY "${BONJOUR_SDK_HOME}/Lib/Win32/dnssd.lib")
+        endif ()
+    elseif (APPLE)
+        #set(DNSSD_LIBRARY "-framework DNS_SD")
+        find_library(DNSSD_LIBRARY dnssd)
+        set(DNSSD_INCLUDE_DIR "/usr/include")
     else ()
-        set(DNSSD_LIBRARY "${BONJOUR_SDK_HOME}/Lib/Win32/dnssd.lib")
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(AVAHI_COMPAT_LIBDNSSD REQUIRED IMPORTED_TARGET avahi-compat-libdns_sd)
+        set(DNSSD_INCLUDE_DIR ${AVAHI_COMPAT_LIBDNSSD_INCLUDE_DIRS})
+        set(DNSSD_LIBRARY PkgConfig::AVAHI_COMPAT_LIBDNSSD)
     endif ()
-elseif (APPLE)
-    #set(DNSSD_LIBRARY "-framework DNS_SD")
-    find_library(DNSSD_LIBRARY dnssd)
-    set(DNSSD_INCLUDE_DIR "/usr/include")
-else ()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(AVAHI_COMPAT_LIBDNSSD REQUIRED IMPORTED_TARGET avahi-compat-libdns_sd)
-    set(DNSSD_INCLUDE_DIR ${AVAHI_COMPAT_LIBDNSSD_INCLUDE_DIRS})
-    set(DNSSD_LIBRARY PkgConfig::AVAHI_COMPAT_LIBDNSSD)
+    add_definitions(-DUSE_APPLE_DNS_SD)
+    include_directories(${DNSSD_INCLUDE_DIR})
 endif ()
-include_directories(${DNSSD_INCLUDE_DIR})
 
 add_subdirectory(ThirdParty/curl)
 add_subdirectory(ThirdParty/libarchive)
@@ -45,8 +50,8 @@ add_subdirectory(ThirdParty/nlohmann)
 set(LIBFLOWDROP_SOURCES
         include/flowdrop.hpp
         src/dns_sd/dns_sd_wrapper.hpp
-        src/dns_sd/dns_sd_wrapper_linux.cpp
-        src/dns_sd/dns_sd_wrapper_win_mac.cpp
+        src/dns_sd/dns_sd_wrapper_avahi.cpp
+        src/dns_sd/dns_sd_wrapper_apple.cpp
         src/device_info.cpp
         src/discovery.cpp
         src/discovery.hpp
@@ -68,7 +73,9 @@ if (LIBFLOWDROP_BUILD_SHARED)
     target_include_directories(libflowdrop_shared PRIVATE ThirdParty/libhv/include)
     target_include_directories(libflowdrop_shared PRIVATE ThirdParty/nlohmann/include)
 
-    target_link_libraries(libflowdrop_shared PRIVATE ${DNSSD_LIBRARY})
+    if (DNSSD_LIBRARY)
+        target_link_libraries(libflowdrop_shared PRIVATE ${DNSSD_LIBRARY})
+    endif ()
     target_link_libraries(libflowdrop_shared PRIVATE libcurl)
     target_link_libraries(libflowdrop_shared PRIVATE hv_static)
     target_link_libraries(libflowdrop_shared PRIVATE archive_static)
@@ -86,7 +93,9 @@ if (LIBFLOWDROP_BUILD_STATIC)
     target_include_directories(libflowdrop_static PRIVATE ThirdParty/libhv/include)
     target_include_directories(libflowdrop_static PRIVATE ThirdParty/nlohmann/include)
 
-    target_link_libraries(libflowdrop_static PRIVATE ${DNSSD_LIBRARY})
+    if (DNSSD_LIBRARY)
+        target_link_libraries(libflowdrop_static PRIVATE ${DNSSD_LIBRARY})
+    endif ()
     target_link_libraries(libflowdrop_static PRIVATE libcurl)
     target_link_libraries(libflowdrop_static PRIVATE hv_static)
     target_link_libraries(libflowdrop_static PRIVATE archive_static)

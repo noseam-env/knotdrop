@@ -26,6 +26,20 @@
 const int MIN_PORT = 1000;
 const int MAX_PORT = 65500;
 
+void prepareAddr(sockaddr_in addr) {
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(flowdrop_default_port);
+}
+
+void randomizePort(sockaddr_in addr) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(MIN_PORT, MAX_PORT);
+    int newPort = distrib(gen);
+    addr.sin_port = htons(newPort);
+}
+
 unsigned short rollAvailablePort() {
 #if defined(_WIN32)
     // initialize Winsock
@@ -44,16 +58,9 @@ unsigned short rollAvailablePort() {
 
     // bind the socket to a local address and port
     sockaddr_in addr = {0};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(flowdrop_default_port);
+    prepareAddr(addr);
     while (bind(sock, (sockaddr *) &addr, sizeof(addr)) == SOCKET_ERROR) {
-        // if the port is not available, try another port
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> distrib(MIN_PORT, MAX_PORT);
-        int newPort = distrib(gen);
-        addr.sin_port = htons(newPort);
+        randomizePort(addr);
     }
 
     // release the socket and clean up Winsock
@@ -66,19 +73,14 @@ unsigned short rollAvailablePort() {
     if (sockfd == -1) {
         return false;
     }
+
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(DEFAULT_PORT);
+    prepareAddr(addr);
     while (bind(sockfd, (sockaddr *) &addr, sizeof(addr)) == -1) {
-        // if the port is not available, try another port
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> distrib(MIN_PORT, MAX_PORT);
-        int newPort = distrib(gen);
-        addr.sin_port = htons(newPort);
+        randomPort(addr);
     }
+
     close(sockfd);
     return ntohs(addr.sin_port);
 #endif
