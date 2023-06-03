@@ -10,6 +10,8 @@ project(libflowdrop)
 option(LIBFLOWDROP_BUILD_STATIC "BUILD STATIC LIBRARIES" ON)
 option(LIBFLOWDROP_BUILD_SHARED "BUILD SHARED LIBRARIES" ON)
 
+cmake_policy(SET CMP0077 NEW)
+
 set(CMAKE_CXX_STANDARD 17)
 
 if (WIN32)
@@ -35,15 +37,10 @@ else ()
 endif ()
 include_directories(${DNSSD_INCLUDE_DIR})
 
-add_subdirectory(ThirdParty/asio)
-add_subdirectory(ThirdParty/bzip2)
 add_subdirectory(ThirdParty/curl)
 add_subdirectory(ThirdParty/libarchive)
 add_subdirectory(ThirdParty/libhv)
 add_subdirectory(ThirdParty/nlohmann)
-add_subdirectory(ThirdParty/xz)
-add_subdirectory(ThirdParty/zlib)
-add_subdirectory(ThirdParty/zstd)
 
 set(LIBFLOWDROP_SOURCES
         include/flowdrop.hpp
@@ -58,63 +55,44 @@ set(LIBFLOWDROP_SOURCES
         src/receiver.cpp
         src/sender.cpp
         src/specification.hpp
-        src/static_libs.hpp
-        src/pipe.cpp
-        src/pipe.hpp
+        src/libarchive.h
+        # may used in future
+        #src/pipe.cpp
+        #src/pipe.hpp
         )
 
-set(library_targets)
 if (LIBFLOWDROP_BUILD_SHARED)
     add_library(libflowdrop_shared SHARED ${LIBFLOWDROP_SOURCES})
-    list(APPEND library_targets libflowdrop_shared)
-endif ()
-if (LIBFLOWDROP_BUILD_STATIC)
-    add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
-    list(APPEND library_targets libflowdrop_static)
-endif ()
 
-
-if (LIBFLOWDROP_BUILD_SHARED)
     target_include_directories(libflowdrop_shared PRIVATE ThirdParty/curl/include)
     target_include_directories(libflowdrop_shared PRIVATE ThirdParty/libhv/include)
     target_include_directories(libflowdrop_shared PRIVATE ThirdParty/nlohmann/include)
-endif ()
-if (LIBFLOWDROP_BUILD_STATIC)
-    target_include_directories(libflowdrop_static PRIVATE ThirdParty/curl/include)
-    target_include_directories(libflowdrop_static PRIVATE ThirdParty/libhv/include)
-    target_include_directories(libflowdrop_static PRIVATE ThirdParty/nlohmann/include)
-endif ()
 
-
-if (LIBFLOWDROP_BUILD_SHARED)
     target_link_libraries(libflowdrop_shared PRIVATE ${DNSSD_LIBRARY})
-    target_link_libraries(libflowdrop_shared PRIVATE asio)
-    target_link_libraries(libflowdrop_shared PRIVATE bzip2)
     target_link_libraries(libflowdrop_shared PRIVATE libcurl)
     target_link_libraries(libflowdrop_shared PRIVATE hv_static)
     target_link_libraries(libflowdrop_shared PRIVATE archive_static)
     target_link_libraries(libflowdrop_shared PRIVATE nlohmann_json)
-    target_link_libraries(libflowdrop_shared PRIVATE xz)
-    target_link_libraries(libflowdrop_shared PRIVATE libzstd_static)
+
+    if (WIN32)
+        target_link_libraries(libflowdrop_shared PRIVATE ws2_32)
+        target_link_libraries(libflowdrop_shared PRIVATE ntdll)
+    endif ()
 endif ()
 if (LIBFLOWDROP_BUILD_STATIC)
+    add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
+
+    target_include_directories(libflowdrop_static PRIVATE ThirdParty/curl/include)
+    target_include_directories(libflowdrop_static PRIVATE ThirdParty/libhv/include)
+    target_include_directories(libflowdrop_static PRIVATE ThirdParty/nlohmann/include)
+
     target_link_libraries(libflowdrop_static PRIVATE ${DNSSD_LIBRARY})
-    target_link_libraries(libflowdrop_static PRIVATE asio)
-    target_link_libraries(libflowdrop_static PRIVATE bzip2)
     target_link_libraries(libflowdrop_static PRIVATE libcurl)
     target_link_libraries(libflowdrop_static PRIVATE hv_static)
     target_link_libraries(libflowdrop_static PRIVATE archive_static)
     target_link_libraries(libflowdrop_static PRIVATE nlohmann_json)
-    target_link_libraries(libflowdrop_static PRIVATE xz)
-    target_link_libraries(libflowdrop_static PRIVATE libzstd_static)
-endif ()
 
-if (WIN32)
-    if (LIBFLOWDROP_BUILD_SHARED)
-        target_link_libraries(libflowdrop_shared PRIVATE ws2_32)
-        target_link_libraries(libflowdrop_shared PRIVATE ntdll)
-    endif ()
-    if (LIBFLOWDROP_BUILD_STATIC)
+    if (WIN32)
         target_link_libraries(libflowdrop_static PRIVATE ws2_32)
         target_link_libraries(libflowdrop_static PRIVATE ntdll)
     endif ()
