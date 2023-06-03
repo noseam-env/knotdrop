@@ -26,12 +26,6 @@
 const int MIN_PORT = 1000;
 const int MAX_PORT = 65500;
 
-void prepareAddr(sockaddr_in addr) {
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(flowdrop_default_port);
-}
-
 void randomizePort(sockaddr_in addr) {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -58,7 +52,9 @@ unsigned short rollAvailablePort() {
 
     // bind the socket to a local address and port
     sockaddr_in addr = {0};
-    prepareAddr(addr);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(flowdrop_default_port);
     while (bind(sock, (sockaddr *) &addr, sizeof(addr)) == SOCKET_ERROR) {
         randomizePort(addr);
     }
@@ -76,9 +72,11 @@ unsigned short rollAvailablePort() {
 
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
-    prepareAddr(addr);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(flowdrop_default_port);
     while (bind(sockfd, (sockaddr *) &addr, sizeof(addr)) == -1) {
-        randomPort(addr);
+        randomizePort(addr);
     }
 
     close(sockfd);
