@@ -14,46 +14,42 @@
 
 using json = nlohmann::json;
 
+void getJsonOptionalString(const json& j, const std::string& key, std::optional<std::string>& strOpt) {
+    if (j.count(key) != 0) {
+        std::string strValue;
+        j.at(key).get_to(strValue);
+        if (!strValue.empty()) {
+            strOpt = std::move(strValue);
+        }
+    }
+}
+
+void setJsonOptionalString(json& j, const std::string& key, const std::optional<std::string>& strOpt) {
+    if (strOpt.has_value()) {
+        j[key] = *strOpt;
+    }
+}
+
 namespace flowdrop {
 
     bool debug = false;
 
     void to_json(json &j, const DeviceInfo &d) {
         j["id"] = d.id;
-        if (!d.uuid.empty()) {
-            j["uuid"] = d.uuid;
-        }
-        if (!d.name.empty()) {
-            j["name"] = d.name;
-        }
-        if (!d.model.empty()) {
-            j["model"] = d.model;
-        }
-        if (!d.platform.empty()) {
-            j["platform"] = d.platform;
-        }
-        if (!d.system_version.empty()) {
-            j["system_version"] = d.system_version;
-        }
+        setJsonOptionalString(j, "uuid", d.uuid);
+        setJsonOptionalString(j, "name", d.name);
+        setJsonOptionalString(j, "model", d.model);
+        setJsonOptionalString(j, "platform", d.platform);
+        setJsonOptionalString(j, "system_version", d.system_version);
     }
 
     void from_json(const json &j, DeviceInfo &d) {
         j.at("id").get_to(d.id);
-        if (j.count("uuid") != 0) {
-            j.at("uuid").get_to(d.uuid);
-        }
-        if (j.count("name") != 0) {
-            j.at("name").get_to(d.name);
-        }
-        if (j.count("model") != 0) {
-            j.at("model").get_to(d.model);
-        }
-        if (j.count("platform") != 0) {
-            j.at("platform").get_to(d.platform);
-        }
-        if (j.count("system_version") != 0) {
-            j.at("system_version").get_to(d.system_version);
-        }
+        getJsonOptionalString(j, "uuid", d.uuid);
+        getJsonOptionalString(j, "name", d.name);
+        getJsonOptionalString(j, "model", d.model);
+        getJsonOptionalString(j, "platform", d.platform);
+        getJsonOptionalString(j, "system_version", d.system_version);
     }
 
     std::string gen_md5_id() {
