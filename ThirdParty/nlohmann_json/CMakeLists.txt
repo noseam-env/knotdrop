@@ -3,7 +3,5 @@
 # For license and copyright information please follow this link:
 # https://github.com/FlowDrop/libflowdrop/blob/master/LEGAL
 
-set(BUILD_CURL_EXE OFF)
-set(BUILD_SHARED_LIBS OFF)
-set(CURL_ENABLE_SSL OFF)
-add_subdirectory(curl-8.1.1)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+add_subdirectory(nlohmann_json-3.11.2)

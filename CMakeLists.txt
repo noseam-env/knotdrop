@@ -5,15 +5,47 @@
 
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
+cmake_policy(SET CMP0077 NEW)
+
 project(libflowdrop)
 
 option(LIBFLOWDROP_BUILD_STATIC "BUILD STATIC LIBRARIES" ON)
 option(LIBFLOWDROP_BUILD_SHARED "BUILD SHARED LIBRARIES" ON)
 option(USE_APPLE_DNS_SD "USE APPLE DNS_SD" ON)
 
-cmake_policy(SET CMP0077 NEW)
-
 set(CMAKE_CXX_STANDARD 17)
+
+set(LIBFLOWDROP_SOURCES
+        include/flowdrop.hpp
+        src/dns_sd/dns_sd_wrapper.hpp
+        src/dns_sd/dns_sd_wrapper_avahi.cpp
+        src/dns_sd/dns_sd_wrapper_apple.cpp
+        src/device_info.cpp
+        src/discovery.cpp
+        src/discovery.hpp
+        src/portroller.cpp
+        src/portroller.hpp
+        src/receiver.cpp
+        src/sender.cpp
+        src/specification.hpp
+        src/libarchive.h
+        # may used in future
+        #src/pipe.cpp
+        #src/pipe.hpp
+        )
+
+set(LIBFLOWDROP_LIBS
+        libcurl
+        hv_static
+        archive_static
+        nlohmann_json::nlohmann_json)
+
+set(LIBFLOWDROP_TARGET_INCLUDE ${LIBHV_HEADERS})
+
+add_subdirectory(ThirdParty/curl)
+add_subdirectory(ThirdParty/libarchive)
+add_subdirectory(ThirdParty/libhv)
+add_subdirectory(ThirdParty/nlohmann_json)
 
 if (USE_APPLE_DNS_SD)
     if (WIN32)
@@ -39,70 +71,37 @@ if (USE_APPLE_DNS_SD)
         set(DNSSD_LIBRARY PkgConfig::AVAHI_COMPAT_LIBDNSSD)
     endif ()
     add_definitions(-DUSE_APPLE_DNS_SD)
-    include_directories(${DNSSD_INCLUDE_DIR})
 endif ()
 
-add_subdirectory(ThirdParty/curl)
-add_subdirectory(ThirdParty/libarchive)
-add_subdirectory(ThirdParty/libhv)
-add_subdirectory(ThirdParty/nlohmann)
+if (DNSSD_INCLUDE_DIR)
+    set(LIBFLOWDROP_TARGET_INCLUDE ${LIBFLOWDROP_TARGET_INCLUDE} ${DNSSD_INCLUDE_DIR})
+    #list(APPEND LIBFLOWDROP_TARGET_INCLUDE ${DNSSD_INCLUDE_DIR})
+endif ()
+if (DNSSD_LIBRARY)
+    list(APPEND LIBFLOWDROP_LIBS ${DNSSD_LIBRARY})
+endif ()
 
-set(LIBFLOWDROP_SOURCES
-        include/flowdrop.hpp
-        src/dns_sd/dns_sd_wrapper.hpp
-        src/dns_sd/dns_sd_wrapper_avahi.cpp
-        src/dns_sd/dns_sd_wrapper_apple.cpp
-        src/device_info.cpp
-        src/discovery.cpp
-        src/discovery.hpp
-        src/portroller.cpp
-        src/portroller.hpp
-        src/receiver.cpp
-        src/sender.cpp
-        src/specification.hpp
-        src/libarchive.h
-        # may used in future
-        #src/pipe.cpp
-        #src/pipe.hpp
-        )
+if (WIN32)
+    #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MT")
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MDd")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MDd")
+
+    list(APPEND LIBFLOWDROP_LIBS ws2_32 ntdll)
+endif ()
+
+if (UNIX)
+    set_property(TARGET libcurl PROPERTY POSITION_INDEPENDENT_CODE ON)
+    set_property(TARGET hv_static PROPERTY POSITION_INDEPENDENT_CODE ON)
+endif ()
 
 if (LIBFLOWDROP_BUILD_SHARED)
     add_library(libflowdrop_shared SHARED ${LIBFLOWDROP_SOURCES})
-
-    target_include_directories(libflowdrop_shared PRIVATE ThirdParty/curl/include)
-    target_include_directories(libflowdrop_shared PRIVATE ThirdParty/libhv/include)
-    target_include_directories(libflowdrop_shared PRIVATE ThirdParty/nlohmann/include)
-
-    if (DNSSD_LIBRARY)
-        target_link_libraries(libflowdrop_shared PRIVATE ${DNSSD_LIBRARY})
-    endif ()
-    target_link_libraries(libflowdrop_shared PRIVATE libcurl)
-    target_link_libraries(libflowdrop_shared PRIVATE hv_static)
-    target_link_libraries(libflowdrop_shared PRIVATE archive_static)
-    target_link_libraries(libflowdrop_shared PRIVATE nlohmann_json)
-
-    if (WIN32)
-        target_link_libraries(libflowdrop_shared PRIVATE ws2_32)
-        target_link_libraries(libflowdrop_shared PRIVATE ntdll)
-    endif ()
+    target_include_directories(libflowdrop_shared PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
+    target_link_libraries(libflowdrop_shared PRIVATE ${LIBFLOWDROP_LIBS})
 endif ()
 if (LIBFLOWDROP_BUILD_STATIC)
     add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
-
-    target_include_directories(libflowdrop_static PRIVATE ThirdParty/curl/include)
-    target_include_directories(libflowdrop_static PRIVATE ThirdParty/libhv/include)
-    target_include_directories(libflowdrop_static PRIVATE ThirdParty/nlohmann/include)
-
-    if (DNSSD_LIBRARY)
-        target_link_libraries(libflowdrop_static PRIVATE ${DNSSD_LIBRARY})
-    endif ()
-    target_link_libraries(libflowdrop_static PRIVATE libcurl)
-    target_link_libraries(libflowdrop_static PRIVATE hv_static)
-    target_link_libraries(libflowdrop_static PRIVATE archive_static)
-    target_link_libraries(libflowdrop_static PRIVATE nlohmann_json)
-
-    if (WIN32)
-        target_link_libraries(libflowdrop_static PRIVATE ws2_32)
-        target_link_libraries(libflowdrop_static PRIVATE ntdll)
-    endif ()
+    target_include_directories(libflowdrop_static PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
+    target_link_libraries(libflowdrop_static PRIVATE ${LIBFLOWDROP_LIBS})
 endif ()
