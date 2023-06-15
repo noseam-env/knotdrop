@@ -8,14 +8,15 @@
 #include <iostream>
 #include <set>
 #include "dns_sd/dns_sd_wrapper.hpp"
-#include "../include/flowdrop.hpp"
+#include "flowdrop.hpp"
 #include "discovery.hpp"
 #include "specification.hpp"
 #include "hv/axios.h"
+#include "curl/curl.h"
 
-size_t write_callback(char *contents, size_t size, size_t nmemb, std::string *buffer) {
+size_t curl_write_function(void* contents, size_t size, size_t nmemb, std::string* output) {
     size_t totalSize = size * nmemb;
-    buffer->append(contents, totalSize);
+    output->append(static_cast<char*>(contents), totalSize);
     return totalSize;
 }
 
@@ -25,52 +26,73 @@ void announce(int port) {
     registerService(flowdrop::thisDeviceInfo.id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt);
 }
 
-void flowdrop::find(const flowdrop::findCallback &callback) {
-    std::set<std::string> foundIds;
-
-    findService(flowdrop_reg_type, flowdrop_dns_domain, [callback, &foundIds](const FindReply &findReply) {
-        auto it = foundIds.find(findReply.serviceName);
-        if (it != foundIds.end()) {
-            return;
-        }
-
-        if (debug) {
-            std::cout << "found: " << findReply.serviceName << " " << findReply.regType << " "
-                      << findReply.replyDomain << std::endl;
-        }
-
-        flowdrop::resolve(findReply.serviceName, [callback, &foundIds, &findReply](const Address &address) {
-            if (debug) {
-                std::cout << "resolved: " << address.host << " " << std::to_string(address.port) << std::endl;
-            }
-
-            std::string url = "http://" + address.host + ":" + std::to_string(address.port) + "/device_info";
-
-            auto resp = axios::get(url.c_str());
-            if (resp == nullptr) {
-                return;
-            }
-
-            json jsonData;
-            try {
-                jsonData = json::parse(resp->body);
-            } catch (const std::exception &) {
-                return;
-            }
-            DeviceInfo deviceInfo;
-            from_json(jsonData, deviceInfo);
-
-            callback({deviceInfo, address});
-        });
-    });
-}
-
-void flowdrop::resolve(const std::string &id, const flowdrop::resolveCallback &callback) {
+void resolve(const std::string &id, const resolveCallback &callback) {
     resolveService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, [callback](const ResolveReply &resolveReply) {
         std::unordered_map<std::string, std::string> txt = resolveReply.txt;
         if (txt[flowdrop_txt_key_version] != std::to_string(flowdrop_version)) {
             return;
         }
         callback({resolveReply.host, resolveReply.port});
+    });
+}
+
+void flowdrop::find(const flowdrop::findCallback &callback) {
+    std::set<std::string> foundServices;
+
+    findService(flowdrop_reg_type, flowdrop_dns_domain, [callback, &foundServices](const FindReply &findReply) {
+        auto it = foundServices.find(findReply.serviceName);
+        if (it != foundServices.end()) {
+            return;
+        }
+        foundServices.insert(findReply.serviceName);
+
+        if (debug) {
+            std::cout << "found: " << findReply.serviceName << " " << findReply.regType << " "
+                      << findReply.replyDomain << std::endl;
+        }
+
+        resolve(findReply.serviceName, [callback](const Address &address) {
+            if (debug) {
+                std::cout << "resolved: " << address.host << " " << std::to_string(address.port) << std::endl;
+            }
+
+            curl_global_init(CURL_GLOBAL_NOTHING);
+
+            CURL* curl = curl_easy_init();
+            if (!curl) {
+                std::cerr << "Failed to initialize curl" << std::endl;
+                return;
+            }
+
+            std::string url = "http://" + address.host + ":" + std::to_string(address.port) + "/device_info";
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+
+            std::string response;
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_function);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+            CURLcode res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                //std::cerr << "Failed to execute GET request: " << curl_easy_strerror(res) << std::endl;
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return;
+            }
+
+            curl_easy_cleanup(curl);
+            curl_global_cleanup();
+
+            json jsonData;
+            try {
+                jsonData = json::parse(response);
+            } catch (const std::exception &) {
+                return;
+            }
+            DeviceInfo deviceInfo;
+            from_json(jsonData, deviceInfo);
+
+            callback(deviceInfo);
+        });
     });
 }

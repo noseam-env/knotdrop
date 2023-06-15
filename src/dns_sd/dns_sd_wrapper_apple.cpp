@@ -88,7 +88,7 @@ void registerService(const char *serviceName, const char *regType, const char *d
 
     if (err != kDNSServiceErr_NoError) {
         std::cerr << "DNSServiceRegister failed with error " << err << std::endl;
-        exit(EXIT_FAILURE);
+        return;
     }
 
     loop(sdRef);

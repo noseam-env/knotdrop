@@ -1,0 +1,3 @@
+[submodule "ThirdParty/libvirtualtfa"]
+	path = ThirdParty/libvirtualtfa
+	url = https://github.com/FlowDrop/libvirtualtfa

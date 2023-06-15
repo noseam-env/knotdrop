@@ -9,7 +9,10 @@
 #define LIBFLOWDROP_DNS_SD_WRAPPER_HPP
 
 #include <functional>
-#include <unordered_map> // required on Android
+
+#if defined(ANDROID)
+#include <unordered_map>
+#endif
 
 void registerService(const char *serviceName, const char *regType, const char *domain, int port, const std::unordered_map<std::string, std::string>& txt);
 

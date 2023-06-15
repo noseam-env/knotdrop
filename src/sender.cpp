@@ -5,206 +5,162 @@
  * https://github.com/FlowDrop/libflowdrop/blob/master/LEGAL
  */
 
-#include "../include/flowdrop.hpp"
-#include "hv/axios.h"
-#include "libarchive.h"
+#include "flowdrop.hpp"
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <string>
 #include <thread>
-#include <sys/stat.h>
 #include <future>
 #include "specification.hpp"
 #include "curl/curl.h"
+#include "virtualtfa.hpp"
+#include "discovery.hpp"
 
+
+size_t writeCallback(char* data, size_t size, size_t nmemb, std::string* response) {
+    size_t totalSize = size * nmemb;
+    response->append(data, totalSize);
+    return totalSize;
+}
 
 bool ask(const std::string &baseUrl, const std::vector<std::string> &files, int timeout) {
-    std::vector<flowdrop::FileInfo> fileInfoVec(files.size());
+    std::vector<flowdrop::FileInfo> filesInfo(files.size());
     for (size_t i = 0; i < files.size(); ++i) {
         std::ifstream file(files[i], std::ios::binary | std::ios::ate);
         if (!file.is_open()) {
-            std::cout << "Failed to open file: " << files[i] << std::endl;
+            std::cerr << "Failed to open file: " << files[i] << std::endl;
             return false;
         }
         std::streampos fileSize = file.tellg();
-        fileInfoVec[i].name = files[i];
-        fileInfoVec[i].size = static_cast<int64_t>(fileSize);
+        filesInfo[i].name = files[i];
+        filesInfo[i].size = static_cast<std::size_t>(fileSize);
         file.close();
     }
 
-    flowdrop::SendAsk askIn;
-    askIn.sender = flowdrop::thisDeviceInfo;
-    askIn.files = fileInfoVec;
+    flowdrop::SendAsk askData;
+    askData.sender = flowdrop::thisDeviceInfo;
+    askData.files = filesInfo;
 
-    std::string jsonData = json(askIn).dump();
+    std::string jsonData = json(askData).dump();
 
-    Request req(new HttpRequest);
-    req->method = HTTP_POST;
-    req->url = baseUrl + flowdrop_endpoint_ask;
-    req->timeout = timeout;
-    req->body = jsonData;
-    req->headers["Content-Type"] = std::to_string(APPLICATION_JSON);
-    auto resp = requests::request(req);
-    if (resp == nullptr) {
-        //printf("request failed!\n");
+    CURL* curl = curl_easy_init();
+    if (!curl) {
         return false;
     }
 
-    json responseJson = json::parse(resp->body);
+    std::string url = baseUrl + flowdrop_endpoint_ask;
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, jsonData.size());
+
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    std::string response;
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::cerr << "Ask error: " << curl_easy_strerror(res) << std::endl;
+        curl_easy_cleanup(curl);
+        return false;
+    }
+    curl_easy_cleanup(curl);
+
+    json responseJson;
+    try {
+        responseJson = json::parse(response);
+    } catch (std::exception &) {
+        return false;
+    }
 
     return responseJson["accepted"].get<bool>();
-}
-
-long sizeFILE(FILE *file) {
-    long fileSize = 0;
-    if (file != nullptr) {
-        long currentPosition = std::ftell(file);
-        std::fseek(file, 0, SEEK_END);
-        fileSize = std::ftell(file);
-        std::fseek(file, currentPosition, SEEK_SET);
-    }
-    return fileSize;
-}
-
-void packFile(archive *a, const std::string &filePath) {
-    std::filesystem::path path(filePath);
-
-    FILE* file = fopen(filePath.c_str(), "rb");
-    if (!file) {
-        std::cerr << "Failed to open file: " << strerror(errno) << std::endl;
-        return;
-    }
-
-    struct archive_entry *entry = archive_entry_new();
-
-    archive_entry_set_pathname(entry, path.filename().string().c_str());
-    archive_entry_set_size(entry, sizeFILE(file));
-    archive_entry_set_filetype(entry, AE_IFREG);
-    archive_entry_set_perm(entry, 0644);
-    archive_write_header(a, entry);
-
-    char buff[8192];
-
-    size_t len = fread(buff, 1, sizeof(buff), file);
-    while (len > 0) {
-        archive_write_data(a, buff, len);
-        len = fread(buff, 1, sizeof(buff), file);
-    }
-    fclose(file);
-
-    archive_entry_free(entry);
-}
-
-void createTar(const std::vector<std::string> &files, FILE *outputFile) {
-    struct archive *a = archive_write_new();
-    //archive_write_set_format_ustar(a);
-    archive_write_set_format_pax_restricted(a);
-
-    if (archive_write_open_FILE(a, outputFile) != ARCHIVE_OK) {
-        std::cerr << archive_error_string(a) << std::endl;
-    }
-
-    for (const auto &file: files) {
-        packFile(a, file);
-        //std::cout << file << std::endl;
-    }
-
-    archive_write_close(a);
-    archive_write_free(a);
-}
-
-HV_INLINE Response uploadLargeFile(const char *url, FILE *fp, requests::upload_progress_cb progress_cb = NULL,
-                                   http_method method = HTTP_POST, const http_headers &headers = DefaultHeaders) {
-    // open file
-    HFile file;
-    file.fp = fp;
-
-    hv::HttpClient cli;
-    Request req(new HttpRequest);
-    req->method = method;
-    req->url = url;
-    req->timeout = 3600; // 1h
-    if (&headers != &DefaultHeaders) {
-        req->headers = headers;
-    }
-
-    // connect
-    req->ParseUrl();
-    //std::cout << "host: " << req->host << std::endl;
-    //std::cout << "port: " << std::to_string(req->port) << std::endl;
-    //std::cout << "url: " << url << std::endl;
-    int connfd = cli.connect(req->host.c_str(), req->port, req->IsHttps(), req->connect_timeout);
-    if (connfd < 0) {
-        std::cout << "135" << std::endl;
-        return NULL;
-    }
-
-    // send header
-    size_t total_bytes = sizeFILE(file.fp);
-    req->SetHeader("Content-Length", hv::to_string(total_bytes));
-    req->SetHeader("Transfer-Encoding", "chunked");
-    req->SetHeader("Content-Type", "application/x-tar");
-    int ret = cli.sendHeader(req.get());
-    if (ret != 0) {
-        std::cout << "146" << std::endl;
-        return NULL;
-    }
-
-    // send file
-    size_t sended_bytes = 0;
-    char filebuf[40960]; // 40K
-    int filebuflen = sizeof(filebuf);
-    int nread, nsend;
-    while (sended_bytes < total_bytes) {
-        nread = file.read(filebuf, filebuflen);
-        if (nread <= 0) {
-            std::cout << "158" << std::endl;
-            return NULL;
-        }
-        nsend = cli.sendData(filebuf, nread);
-        if (nsend != nread) {
-            std::cout << "163" << std::endl;
-            return NULL;
-        }
-        sended_bytes += nsend;
-        if (progress_cb) {
-            progress_cb(sended_bytes, total_bytes);
-        }
-    }
-
-    // recv response
-    Response resp(new HttpResponse);
-    ret = cli.recvResponse(resp.get());
-    if (ret != 0) {
-        std::cout << "176" << std::endl; // HERE
-        return NULL;
-    }
-    return resp;
 }
 
 size_t ignoreDataCallback(char* /*buffer*/, size_t size, size_t nmemb, void* /*userdata*/) {
     return size * nmemb;
 }
 
-void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files) {
-    FILE *tmpFile = std::tmpfile();
+size_t tfaReadFunction(char* buffer, size_t size, size_t nmemb, void* userdata) {
+    auto* tfa = static_cast<VirtualTfaWriter*>(userdata);
+    return tfa->writeTo(buffer, size * nmemb);
+}
 
-    createTar(files, tmpFile);
+class SendProgressListener : public IProgressListener {
+public:
+    SendProgressListener(flowdrop::IEventListener *eventListener) : m_eventListener(eventListener) {}
 
-    std::fseek(tmpFile, 0, SEEK_SET);
+    void totalProgress(std::size_t currentSize) override {
+        if (m_eventListener != nullptr) {
+            m_eventListener->onSendingTotalProgress(m_totalSize, currentSize);
+        }
+    }
 
-    /*auto resp = uploadLargeFile((baseUrl + flowdrop_endpoint_send).c_str(), tmpFile);
-    if (resp == nullptr) {
-        printf("Request failed!\n");
-    }*/
+    void fileStart(char *fileName, std::size_t fileSize) override {
+        if (m_eventListener != nullptr) {
+            m_eventListener->onSendingFileStart( {fileName, fileSize});
+        }
+    }
+
+    void fileProgress(char *fileName, std::size_t fileSize, std::size_t currentSize) override {
+        if (m_eventListener != nullptr) {
+            m_eventListener->onSendingFileProgress({fileName, fileSize}, currentSize);
+        }
+    }
+
+    void fileEnd(char *fileName, std::size_t fileSize) override {
+        if (m_eventListener != nullptr) {
+            m_eventListener->onSendingFileEnd({fileName, fileSize});
+        }
+    }
+
+    void setTotalSize(std::size_t totalSize) {
+        SendProgressListener::m_totalSize = totalSize;
+    }
+
+private:
+    flowdrop::IEventListener *m_eventListener;
+    std::size_t m_totalSize = 0;
+};
+
+void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files, flowdrop::IEventListener *listener) {
+    VirtualTfaArchive *archive = virtual_tfa_archive_new();
+
+    for (const std::string &filePath: files) {
+        VirtualTfaEntry *entry = virtual_tfa_entry_new(filePath);
+        virtual_tfa_archive_add(archive, entry);
+    }
+
+    auto *sendProgressListener = new SendProgressListener(listener);
+    auto *tfa = new VirtualTfaWriter(archive, sendProgressListener);
+
+    std::size_t totalSize = tfa->calcSize();
+    sendProgressListener->setTotalSize(totalSize);
+
+    if (listener != nullptr) {
+        listener->onSendingStart();
+    }
+
+    curl_global_init(CURL_GLOBAL_NOTHING);
 
     CURL* curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, (baseUrl + flowdrop_endpoint_send).c_str());
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_READDATA, tmpFile);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, sizeFILE(tmpFile));
+        curl_easy_setopt(curl, CURLOPT_READDATA, tfa);
+        curl_easy_setopt(curl, CURLOPT_READFUNCTION, tfaReadFunction);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, totalSize);
+
+        struct curl_slist* headers = nullptr;
+        std::string header = std::string(flowdrop_deviceinfo_header) + ": " + json(flowdrop::thisDeviceInfo).dump();
+        headers = curl_slist_append(headers, header.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ignoreDataCallback);
 
@@ -214,40 +170,50 @@ void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files
         }
 
         curl_easy_cleanup(curl);
+        curl_global_cleanup();
     }
 
-    fclose(tmpFile);
+    virtual_tfa_archive_close(archive);
 }
 
-bool askAndSend(const flowdrop::Address &address, const std::vector<std::string> &files, int askTimeout) {
+bool askAndSend(const Address &address, const std::vector<std::string> &files, int askTimeout, flowdrop::IEventListener *listener) {
     std::string baseUrl = "http://" + address.host + ":" + std::to_string(address.port) + "/";
 
-    std::cout << "Asking receiver to accept ..." << std::endl;
+    if (listener != nullptr) {
+        listener->onAskingReceiver();
+    }
 
     if (!ask(baseUrl, files, askTimeout)) {
-        std::cout << "Receiver declined" << std::endl;
+        if (listener != nullptr) {
+            listener->onReceiverDeclined();
+        }
         return false;
     }
 
-    std::cout << "Receiver accepted" << std::endl;
+    if (listener != nullptr) {
+        listener->onReceiverAccepted();
+    }
 
-    sendFiles(baseUrl, files);
+    sendFiles(baseUrl, files, listener);
 
-    std::cout << "Done!" << std::endl;
+    if (listener != nullptr) {
+        listener->onSendingEnd();
+    }
+
     return true;
 }
 
 void flowdrop::send(const std::string &receiverId, const std::vector<std::string> &files, int resolveTimeout,
-                    int askTimeout) {
-    std::cout << "Resolving receiver ..." << std::endl;
+                    int askTimeout, IEventListener *listener) {
+    if (listener != nullptr) {
+        listener->onResolving();
+    }
 
-    bool resolved = false;
     std::promise<Address> addressPromise;
     std::future<Address> addressFuture = addressPromise.get_future();
 
-    std::thread resolveThread([&resolved, receiverId, &addressPromise](const std::vector<std::string> &files) {
-        flowdrop::resolve(receiverId, [&resolved, &addressPromise](const Address &address) {
-            resolved = true;
+    std::thread resolveThread([receiverId, &addressPromise](const std::vector<std::string> &files) {
+        resolve(receiverId, [&addressPromise](const Address &address) {
             addressPromise.set_value(address);
         });
     }, files);
@@ -256,11 +222,18 @@ void flowdrop::send(const std::string &receiverId, const std::vector<std::string
 
     if (status == std::future_status::ready) {
         Address address = addressFuture.get();
-        std::cout << "Resolved " << address.host << ":" << std::to_string(address.port) << std::endl;
-        askAndSend(address, files, askTimeout);
+        if (listener != nullptr) {
+            listener->onResolved();
+        }
+        if (flowdrop::debug) {
+            std::cout << "resolved: " << address.host << ":" << std::to_string(address.port) << std::endl;
+        }
+        askAndSend(address, files, askTimeout, listener);
     } else {
-        std::cout << "Receiver not found" << std::endl;
-        std::exit(EXIT_FAILURE);
+        if (listener != nullptr) {
+            listener->onReceiverNotFound();
+        }
+        return;
     }
 
     resolveThread.join();

@@ -9,6 +9,6 @@
 
 #include "dns_sd_wrapper.hpp"
 
-// TODO: avahi dns sd (not avahi-compat-libdns_sd)
+// TODO: avahi service discovery
 
 #endif  // USE_AVAHI_DNS_SD

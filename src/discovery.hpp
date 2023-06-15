@@ -10,4 +10,13 @@
 
 void announce(int port);
 
+struct Address {
+    std::string host;
+    uint16_t port;
+};
+
+using resolveCallback = std::function<void(const Address &)>;
+
+void resolve(const std::string &id, const resolveCallback &callback);
+
 #endif //LIBFLOWDROP_DISCOVERY_HPP

@@ -16,7 +16,6 @@ option(USE_APPLE_DNS_SD "USE APPLE DNS_SD" ON)
 set(CMAKE_CXX_STANDARD 17)
 
 set(LIBFLOWDROP_SOURCES
-        include/flowdrop.hpp
         src/dns_sd/dns_sd_wrapper.hpp
         src/dns_sd/dns_sd_wrapper_avahi.cpp
         src/dns_sd/dns_sd_wrapper_apple.cpp
@@ -28,23 +27,23 @@ set(LIBFLOWDROP_SOURCES
         src/receiver.cpp
         src/sender.cpp
         src/specification.hpp
-        src/libarchive.h
-        # may used in future
-        #src/pipe.cpp
-        #src/pipe.hpp
         )
 
 set(LIBFLOWDROP_LIBS
         libcurl
         hv_static
-        archive_static
+        virtualtfa_static
         nlohmann_json::nlohmann_json)
+
+set(LIBFLOWDROP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(LIBFLOWDROP_TARGET_INCLUDE ${LIBHV_HEADERS})
 
+set(VIRTUALTFA_BUILD_SHARED OFF)
+
 add_subdirectory(ThirdParty/curl)
-add_subdirectory(ThirdParty/libarchive)
 add_subdirectory(ThirdParty/libhv)
+add_subdirectory(ThirdParty/libvirtualtfa)
 add_subdirectory(ThirdParty/nlohmann_json)
 
 if (USE_APPLE_DNS_SD)
@@ -82,10 +81,25 @@ if (DNSSD_LIBRARY)
 endif ()
 
 if (WIN32)
-    #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MT")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MDd")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MDd")
+    option(BUILD_FOR_MT "build for /MT" OFF)
+    if(BUILD_FOR_MT)
+        # MultiThreaded
+        # Compile with -MT or equivalent flag(s) to use a multi-threaded statically-linked runtime library.
+        #
+        # MultiThreadedDLL
+        # Compile with -MD or equivalent flag(s) to use a multi-threaded dynamically-linked runtime library.
+        #
+        # MultiThreadedDebug
+        # Compile with -MTd or equivalent flag(s) to use a multi-threaded statically-linked runtime library.
+        #
+        # MultiThreadedDebugDLL
+        # Compile with -MDd or equivalent flag(s) to use a multi-threaded dynamically-linked runtime library.
+
+        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+    endif()
 
     list(APPEND LIBFLOWDROP_LIBS ws2_32 ntdll)
 endif ()
@@ -97,11 +111,13 @@ endif ()
 
 if (LIBFLOWDROP_BUILD_SHARED)
     add_library(libflowdrop_shared SHARED ${LIBFLOWDROP_SOURCES})
+    target_include_directories(libflowdrop_shared PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_shared PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
     target_link_libraries(libflowdrop_shared PRIVATE ${LIBFLOWDROP_LIBS})
 endif ()
 if (LIBFLOWDROP_BUILD_STATIC)
     add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
+    target_include_directories(libflowdrop_static PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_static PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
     target_link_libraries(libflowdrop_static PRIVATE ${LIBFLOWDROP_LIBS})
 endif ()
