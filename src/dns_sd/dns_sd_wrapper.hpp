@@ -14,7 +14,7 @@
 #include <unordered_map>
 #endif
 
-void registerService(const char *serviceName, const char *regType, const char *domain, int port, const std::unordered_map<std::string, std::string>& txt);
+void registerService(const char *serviceName, const char *regType, const char *domain, int port, const std::unordered_map<std::string, std::string>& txt, std::atomic<bool> &stopFlag);
 
 struct FindReply {
     const char* serviceName;
@@ -22,7 +22,7 @@ struct FindReply {
     const char* replyDomain;
 };
 
-void findService(const char *regType, const char *domain, std::function<void(const FindReply&)> callback);
+void findService(const char *regType, const char *domain, std::function<void(const FindReply&)> callback, std::atomic<bool> &stopFlag);
 
 struct ResolveReply {
     const char* host;

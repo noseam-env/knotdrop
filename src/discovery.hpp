@@ -8,7 +8,7 @@
 #ifndef LIBFLOWDROP_DISCOVERY_HPP
 #define LIBFLOWDROP_DISCOVERY_HPP
 
-void announce(int port);
+void announce(const std::string &id, int port, std::atomic<bool>& stopFlag);
 
 struct Address {
     std::string host;

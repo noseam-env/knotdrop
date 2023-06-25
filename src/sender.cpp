@@ -17,14 +17,13 @@
 #include "virtualtfa.hpp"
 #include "discovery.hpp"
 
-
-size_t writeCallback(char* data, size_t size, size_t nmemb, std::string* response) {
+size_t writeCallback(char *data, size_t size, size_t nmemb, std::string *response) {
     size_t totalSize = size * nmemb;
     response->append(data, totalSize);
     return totalSize;
 }
 
-bool ask(const std::string &baseUrl, const std::vector<std::string> &files, int timeout) {
+bool ask(const std::string &baseUrl, const std::vector<std::string> &files, const std::chrono::milliseconds &timeout, const flowdrop::DeviceInfo &deviceInfo) {
     std::vector<flowdrop::FileInfo> filesInfo(files.size());
     for (size_t i = 0; i < files.size(); ++i) {
         std::ifstream file(files[i], std::ios::binary | std::ios::ate);
@@ -39,12 +38,12 @@ bool ask(const std::string &baseUrl, const std::vector<std::string> &files, int 
     }
 
     flowdrop::SendAsk askData;
-    askData.sender = flowdrop::thisDeviceInfo;
+    askData.sender = deviceInfo;
     askData.files = filesInfo;
 
     std::string jsonData = json(askData).dump();
 
-    CURL* curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
     if (!curl) {
         return false;
     }
@@ -52,12 +51,12 @@ bool ask(const std::string &baseUrl, const std::vector<std::string> &files, int 
     std::string url = baseUrl + flowdrop_endpoint_ask;
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, static_cast<double>(timeout.count()) / 1000.0);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, jsonData.size());
 
-    struct curl_slist* headers = nullptr;
+    struct curl_slist *headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
@@ -83,12 +82,12 @@ bool ask(const std::string &baseUrl, const std::vector<std::string> &files, int 
     return responseJson["accepted"].get<bool>();
 }
 
-size_t ignoreDataCallback(char* /*buffer*/, size_t size, size_t nmemb, void* /*userdata*/) {
+size_t ignoreDataCallback(char * /*buffer*/, size_t size, size_t nmemb, void * /*userdata*/) {
     return size * nmemb;
 }
 
-size_t tfaReadFunction(char* buffer, size_t size, size_t nmemb, void* userdata) {
-    auto* tfa = static_cast<VirtualTfaWriter*>(userdata);
+size_t tfaReadFunction(char *buffer, size_t size, size_t nmemb, void *userdata) {
+    auto *tfa = static_cast<VirtualTfaWriter *>(userdata);
     return tfa->writeTo(buffer, size * nmemb);
 }
 
@@ -104,7 +103,7 @@ public:
 
     void fileStart(char *fileName, std::size_t fileSize) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileStart( {fileName, fileSize});
+            m_eventListener->onSendingFileStart({fileName, fileSize});
         }
     }
 
@@ -129,7 +128,7 @@ private:
     std::size_t m_totalSize = 0;
 };
 
-void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files, flowdrop::IEventListener *listener) {
+void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files, flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     VirtualTfaArchive *archive = virtual_tfa_archive_new();
 
     for (const std::string &filePath: files) {
@@ -149,7 +148,7 @@ void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files
 
     curl_global_init(CURL_GLOBAL_NOTHING);
 
-    CURL* curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, (baseUrl + flowdrop_endpoint_send).c_str());
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -157,8 +156,8 @@ void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files
         curl_easy_setopt(curl, CURLOPT_READFUNCTION, tfaReadFunction);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, totalSize);
 
-        struct curl_slist* headers = nullptr;
-        std::string header = std::string(flowdrop_deviceinfo_header) + ": " + json(flowdrop::thisDeviceInfo).dump();
+        struct curl_slist *headers = nullptr;
+        std::string header = std::string(flowdrop_deviceinfo_header) + ": " + json(deviceInfo).dump();
         headers = curl_slist_append(headers, header.c_str());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
@@ -176,14 +175,15 @@ void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files
     virtual_tfa_archive_close(archive);
 }
 
-bool askAndSend(const Address &address, const std::vector<std::string> &files, int askTimeout, flowdrop::IEventListener *listener) {
+bool askAndSend(const Address &address, const std::vector<std::string> &files, const std::chrono::milliseconds askTimeout,
+                flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     std::string baseUrl = "http://" + address.host + ":" + std::to_string(address.port) + "/";
 
     if (listener != nullptr) {
         listener->onAskingReceiver();
     }
 
-    if (!ask(baseUrl, files, askTimeout)) {
+    if (!ask(baseUrl, files, askTimeout, deviceInfo)) {
         if (listener != nullptr) {
             listener->onReceiverDeclined();
         }
@@ -194,7 +194,7 @@ bool askAndSend(const Address &address, const std::vector<std::string> &files, i
         listener->onReceiverAccepted();
     }
 
-    sendFiles(baseUrl, files, listener);
+    sendFiles(baseUrl, files, listener, deviceInfo);
 
     if (listener != nullptr) {
         listener->onSendingEnd();
@@ -203,8 +203,9 @@ bool askAndSend(const Address &address, const std::vector<std::string> &files, i
     return true;
 }
 
-void flowdrop::send(const std::string &receiverId, const std::vector<std::string> &files, int resolveTimeout,
-                    int askTimeout, IEventListener *listener) {
+bool send(const std::string &receiverId, const std::vector<std::string> &files,
+          const std::chrono::milliseconds &resolveTimeout, const std::chrono::milliseconds &askTimeout,
+          flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     if (listener != nullptr) {
         listener->onResolving();
     }
@@ -212,14 +213,15 @@ void flowdrop::send(const std::string &receiverId, const std::vector<std::string
     std::promise<Address> addressPromise;
     std::future<Address> addressFuture = addressPromise.get_future();
 
-    std::thread resolveThread([receiverId, &addressPromise](const std::vector<std::string> &files) {
+    std::thread resolveThread([receiverId, &addressPromise]() {
         resolve(receiverId, [&addressPromise](const Address &address) {
             addressPromise.set_value(address);
         });
-    }, files);
+    });
 
-    std::future_status status = addressFuture.wait_for(std::chrono::seconds(resolveTimeout));
+    std::future_status status = addressFuture.wait_for(resolveTimeout);
 
+    bool result;
     if (status == std::future_status::ready) {
         Address address = addressFuture.get();
         if (listener != nullptr) {
@@ -228,14 +230,76 @@ void flowdrop::send(const std::string &receiverId, const std::vector<std::string
         if (flowdrop::debug) {
             std::cout << "resolved: " << address.host << ":" << std::to_string(address.port) << std::endl;
         }
-        askAndSend(address, files, askTimeout, listener);
+        result = askAndSend(address, files, askTimeout, listener, deviceInfo);
     } else {
         if (listener != nullptr) {
             listener->onReceiverNotFound();
         }
-        return;
+        return false;
     }
 
     resolveThread.join();
+    return result;
 }
 
+namespace flowdrop {
+    SendRequest::SendRequest() {}
+
+    SendRequest& SendRequest::setDeviceInfo(const DeviceInfo& info) {
+        deviceInfo = info;
+        return *this;
+    }
+
+    SendRequest& SendRequest::setReceiverId(const std::string& id) {
+        receiverId = id;
+        return *this;
+    }
+
+    SendRequest& SendRequest::setFiles(const std::vector<std::string>& files) {
+        this->files = files;
+        return *this;
+    }
+
+    SendRequest& SendRequest::setResolveTimeout(const std::chrono::milliseconds& timeout) {
+        resolveTimeout = timeout;
+        return *this;
+    }
+
+    SendRequest& SendRequest::setAskTimeout(const std::chrono::milliseconds& timeout) {
+        askTimeout = timeout;
+        return *this;
+    }
+
+    SendRequest& SendRequest::setEventListener(IEventListener* listener) {
+        eventListener = listener;
+        return *this;
+    }
+
+    DeviceInfo SendRequest::getDeviceInfo() const {
+        return deviceInfo;
+    }
+
+    std::string SendRequest::getReceiverId() const {
+        return receiverId;
+    }
+
+    std::vector<std::string> SendRequest::getFiles() const {
+        return files;
+    }
+
+    std::chrono::milliseconds SendRequest::getResolveTimeout() const {
+        return resolveTimeout;
+    }
+
+    std::chrono::milliseconds SendRequest::getAskTimeout() const {
+        return askTimeout;
+    }
+
+    IEventListener* SendRequest::getEventListener() const {
+        return eventListener;
+    }
+
+    bool SendRequest::execute() {
+        return send(receiverId, files, resolveTimeout, askTimeout, eventListener, deviceInfo);
+    }
+}

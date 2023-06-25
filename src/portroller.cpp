@@ -23,8 +23,8 @@
 
 #endif
 
-const int MIN_PORT = 1000;
-const int MAX_PORT = 65500;
+const int MIN_PORT = 1024;
+const int MAX_PORT = 65536;
 
 void randomizePort(sockaddr_in addr) {
     std::random_device rd;

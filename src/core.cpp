@@ -5,16 +5,11 @@
  * https://github.com/FlowDrop/libflowdrop/blob/master/LEGAL
  */
 
-#include <string>
-#include "flowdrop.hpp"
-#include "nlohmann/json.hpp"
-#include <iostream>
 #include <utility>
 #include <sstream>
+#include "flowdrop.hpp"
 
-using json = nlohmann::json;
-
-void getJsonOptionalString(const json& j, const std::string& key, std::optional<std::string>& strOpt) {
+void getJsonOptionalString(const json &j, const std::string &key, std::optional<std::string> &strOpt) {
     if (j.count(key) != 0) {
         std::string strValue;
         j.at(key).get_to(strValue);
@@ -24,7 +19,7 @@ void getJsonOptionalString(const json& j, const std::string& key, std::optional<
     }
 }
 
-void setJsonOptionalString(json& j, const std::string& key, const std::optional<std::string>& strOpt) {
+void setJsonOptionalString(json &j, const std::string &key, const std::optional<std::string> &strOpt) {
     if (strOpt.has_value()) {
         j[key] = *strOpt;
     }
@@ -34,25 +29,7 @@ namespace flowdrop {
 
     bool debug = false;
 
-    void to_json(json &j, const DeviceInfo &d) {
-        j["id"] = d.id;
-        setJsonOptionalString(j, "uuid", d.uuid);
-        setJsonOptionalString(j, "name", d.name);
-        setJsonOptionalString(j, "model", d.model);
-        setJsonOptionalString(j, "platform", d.platform);
-        setJsonOptionalString(j, "system_version", d.system_version);
-    }
-
-    void from_json(const json &j, DeviceInfo &d) {
-        j.at("id").get_to(d.id);
-        getJsonOptionalString(j, "uuid", d.uuid);
-        getJsonOptionalString(j, "name", d.name);
-        getJsonOptionalString(j, "model", d.model);
-        getJsonOptionalString(j, "platform", d.platform);
-        getJsonOptionalString(j, "system_version", d.system_version);
-    }
-
-    std::string gen_md5_id() {
+    std::string generate_md5_id() {
         auto now = std::chrono::system_clock::now();
         auto duration = now.time_since_epoch();
         auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
@@ -82,7 +59,23 @@ namespace flowdrop {
         return hash.substr(0, 12);
     }
 
-    DeviceInfo thisDeviceInfo{};
+    void to_json(json &j, const DeviceInfo &d) {
+        j["id"] = d.id;
+        setJsonOptionalString(j, "uuid", d.uuid);
+        setJsonOptionalString(j, "name", d.name);
+        setJsonOptionalString(j, "model", d.model);
+        setJsonOptionalString(j, "platform", d.platform);
+        setJsonOptionalString(j, "system_version", d.system_version);
+    }
+
+    void from_json(const json &j, DeviceInfo &d) {
+        j.at("id").get_to(d.id);
+        getJsonOptionalString(j, "uuid", d.uuid);
+        getJsonOptionalString(j, "name", d.name);
+        getJsonOptionalString(j, "model", d.model);
+        getJsonOptionalString(j, "platform", d.platform);
+        getJsonOptionalString(j, "system_version", d.system_version);
+    }
 
     void to_json(json &j, const FileInfo &d) {
         j["name"] = d.name;
@@ -105,4 +98,3 @@ namespace flowdrop {
     }
 
 }
-

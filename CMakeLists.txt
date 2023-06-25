@@ -19,7 +19,6 @@ set(LIBFLOWDROP_SOURCES
         src/dns_sd/dns_sd_wrapper.hpp
         src/dns_sd/dns_sd_wrapper_avahi.cpp
         src/dns_sd/dns_sd_wrapper_apple.cpp
-        src/device_info.cpp
         src/discovery.cpp
         src/discovery.hpp
         src/portroller.cpp
@@ -27,7 +26,7 @@ set(LIBFLOWDROP_SOURCES
         src/receiver.cpp
         src/sender.cpp
         src/specification.hpp
-        )
+        src/core.cpp)
 
 set(LIBFLOWDROP_LIBS
         libcurl

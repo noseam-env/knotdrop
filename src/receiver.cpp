@@ -16,29 +16,31 @@
 #include <set>
 #include <utility>
 
-static int response_status(HttpResponse *resp, int code = 200, const char *message = nullptr) {
-    if (message == nullptr) message = http_status_str((enum http_status) code);
-    resp->Set("code", code);
-    resp->Set("message", message);
-    return code;
-}
+namespace flowdrop {
+    class ReceiverImpl {
+    public:
+        DeviceInfo deviceInfo;
+        askCallback askCallback;
+        std::filesystem::path destDir;
+        IEventListener *listener = nullptr;
+        std::thread sdThread;
+        std::atomic<bool> *sdStop = nullptr;
+        hv::HttpServer server;
 
-static int response_status(const HttpResponseWriterPtr &writer, int code = 200, const char *message = nullptr) {
-    response_status(writer->response.get(), code, message);
-    writer->End();
-    return code;
-}
-
-static int response_status(const HttpContextPtr &ctx, int code = 200, const char *message = nullptr) {
-    response_status(ctx->response.get(), code, message);
-    ctx->send();
-    return code;
+        void stop() {
+            server.stop();
+            *sdStop = false;
+            if (sdThread.joinable()) {
+                sdThread.join();
+            }
+        }
+    };
 }
 
 class ReceiveProgressListener : public IProgressListener {
 public:
     ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener) :
-        m_sender(std::move(sender)), m_eventListener(eventListener) {}
+            m_sender(std::move(sender)), m_eventListener(eventListener) {}
 
     void totalProgress(std::size_t currentSize) override {
         if (m_eventListener != nullptr) {
@@ -75,8 +77,49 @@ struct ReceiveSession {
     std::size_t totalSize;
 };
 
+void askHandler(const HttpRequestPtr &req, const HttpResponseWriterPtr &writer, flowdrop::ReceiverImpl *receiver) {
+    if (flowdrop::debug) {
+        std::cout << "ask_new: " << req->Host() << std::endl;
+    }
+
+    json j;
+    try {
+        j = json::parse(req->Body());
+    } catch (const std::exception &) {
+        if (flowdrop::debug) {
+            std::cout << "ask_invalid_json: " << req->Host() << std::endl;
+        }
+        writer->Begin();
+        writer->WriteStatus(HTTP_STATUS_BAD_REQUEST);
+        writer->WriteBody("Invalid JSON");
+        writer->End();
+        return;
+    }
+    flowdrop::SendAsk sendAsk = j;
+
+    if (receiver->listener != nullptr) {
+        receiver->listener->onSenderAsk(sendAsk.sender);
+    }
+
+    bool accepted = receiver->askCallback == nullptr || receiver->askCallback(sendAsk);
+
+    if (flowdrop::debug) {
+        std::cout << "ask_accepted: " << req->Host() << std::endl;
+    }
+
+    nlohmann::json resp;
+    resp["accepted"] = accepted;
+    std::string respString = resp.dump();
+
+    writer->Begin();
+    writer->WriteStatus(HTTP_STATUS_OK);
+    writer->WriteHeader("Content-Type", APPLICATION_JSON);
+    writer->WriteBody(respString);
+    writer->End();
+}
+
 int sendHandler(const HttpContextPtr &ctx, http_parser_state state, const char *data, size_t size,
-                const std::string &dest, flowdrop::IEventListener *listener) {
+                flowdrop::ReceiverImpl *receiver) {
     int status_code = HTTP_STATUS_UNFINISHED;
     auto *session = (ReceiveSession *) ctx->userdata;
     switch (state) {
@@ -109,15 +152,22 @@ int sendHandler(const HttpContextPtr &ctx, http_parser_state state, const char *
                 return HTTP_STATUS_BAD_REQUEST;
             }
             std::vector<flowdrop::FileInfo> receivedFiles;
-            auto tfa = new VirtualTfaReader(dest, new ReceiveProgressListener(sender, listener));
+            std::filesystem::file_status destStatus = status(receiver->destDir);
+            if (!exists(destStatus)) {
+                create_directories(receiver->destDir);
+            } else if (!is_directory(destStatus)) {
+                std::cerr << "Destination path is not directory" << std::endl;
+                return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+            }
+            auto tfa = new VirtualTfaReader(receiver->destDir, new ReceiveProgressListener(sender, receiver->listener));
             session = new ReceiveSession{
                     sender,
                     tfa,
                     totalSize
             };
             ctx->userdata = session;
-            if (listener != nullptr) {
-                listener->onReceivingStart(sender, totalSize);
+            if (receiver->listener != nullptr) {
+                receiver->listener->onReceivingStart(sender, totalSize);
             }
         }
             break;
@@ -132,11 +182,13 @@ int sendHandler(const HttpContextPtr &ctx, http_parser_state state, const char *
             break;
         case HP_MESSAGE_COMPLETE: {
             status_code = HTTP_STATUS_OK;
-            ctx->setContentType(APPLICATION_JSON);
-            response_status(ctx, status_code);
+            HttpResponse *resp = ctx->response.get();
+            resp->Set("code", HTTP_STATUS_OK);
+            resp->Set("message", http_status_str(HTTP_STATUS_OK));
+            ctx->send();
             if (session) {
-                if (listener != nullptr) {
-                    listener->onReceivingEnd(session->sender, session->totalSize);
+                if (receiver->listener != nullptr) {
+                    receiver->listener->onReceivingEnd(session->sender, session->totalSize);
                 }
 
                 delete session->tfa;
@@ -159,83 +211,101 @@ int sendHandler(const HttpContextPtr &ctx, http_parser_state state, const char *
     return status_code;
 }
 
-void flowdrop::receive(const std::string &dest, const sendAskCallback &callback, IEventListener *listener) {
-    hlog_set_level(LOG_LEVEL_SILENT);
-
-    HttpService router;
-
-    std::string slash = "/";
-
-    router.GET((slash + flowdrop_endpoint_device_info).c_str(), [](HttpRequest *req, HttpResponse *resp) {
-        resp->SetContentType(APPLICATION_JSON);
-        json j = flowdrop::thisDeviceInfo;
-        return resp->String(j.dump());
-    });
-
-    router.POST((slash + flowdrop_endpoint_ask).c_str(),
-                [&callback, listener](const HttpRequestPtr &req, const HttpResponseWriterPtr &writer) {
-                    if (flowdrop::debug) {
-                        std::cout << "ask_new: " << req->Host() << std::endl;
-                    }
-
-                    json j;
-                    try {
-                        j = json::parse(req->Body());
-                    } catch (const std::exception &) {
-                        if (flowdrop::debug) {
-                            std::cout << "ask_invalid_json: " << req->Host() << std::endl;
-                        }
-                        writer->Begin();
-                        writer->WriteStatus(HTTP_STATUS_BAD_REQUEST);
-                        writer->WriteBody("Invalid JSON");
-                        writer->End();
-                        return;
-                    }
-                    flowdrop::SendAsk sendAsk = j;
-
-                    if (listener != nullptr) {
-                        listener->onSenderAsk(sendAsk.sender);
-                    }
-
-                    bool accepted = callback(sendAsk);
-
-                    if (flowdrop::debug) {
-                        std::cout << "ask_accepted: " << req->Host() << std::endl;
-                    }
-
-                    nlohmann::json resp;
-                    resp["accepted"] = accepted;
-                    std::string respString = resp.dump();
-
-                    writer->Begin();
-                    writer->WriteStatus(HTTP_STATUS_OK);
-                    writer->WriteHeader("Content-Type", APPLICATION_JSON);
-                    writer->WriteBody(respString);
-                    writer->End();
-                });
-
-    router.POST((slash + flowdrop_endpoint_send).c_str(),
-                [dest, listener](const HttpContextPtr &ctx, http_parser_state state, const char *data, size_t size) {
-                    return sendHandler(ctx, state, data, size, dest, listener);
-                });
-
+void receive(flowdrop::ReceiverImpl *receiver, bool wait) {
     unsigned short port = rollAvailablePort();
-
     if (flowdrop::debug) {
         std::cout << "port: " << port << std::endl;
     }
 
-    std::thread sdThread([&port]() {
-        announce(port);
-    });
-    sdThread.detach();
+    std::string slash = "/";
+    std::string deviceInfoStr = json(receiver->deviceInfo).dump();
 
-    if (listener != nullptr) {
+    hlog_set_level(LOG_LEVEL_SILENT);
+
+    HttpService router;
+    router.GET((slash + flowdrop_endpoint_device_info).c_str(),
+               [&deviceInfoStr](HttpRequest *req, HttpResponse *resp) {
+                   resp->SetContentType(APPLICATION_JSON);
+                   return resp->String(deviceInfoStr);
+               });
+    router.POST((slash + flowdrop_endpoint_ask).c_str(),
+                [receiver](const HttpRequestPtr &req, const HttpResponseWriterPtr &writer) {
+                    askHandler(req, writer, receiver);
+                });
+    router.POST((slash + flowdrop_endpoint_send).c_str(),
+                [receiver](const HttpContextPtr &ctx, http_parser_state state, const char *data,
+                           size_t size) {
+                    return sendHandler(ctx, state, data, size, receiver);
+                });
+
+    std::string id = receiver->deviceInfo.id;
+    std::atomic<bool> stopFlag(false);
+    receiver->sdStop = &stopFlag;
+    receiver->sdThread = std::thread([&id, &port, &stopFlag]() {
+        announce(id, port, stopFlag);
+    });
+    receiver->sdThread.detach();
+
+    receiver->server = hv::HttpServer(&router);
+    receiver->server.setPort(port);
+    receiver->server.setThreadNum(3);
+    bool started = false;
+    receiver->server.onWorkerStart = [receiver, &port, &started]() {
+        if (started) return;
+        started = true;
+        if (receiver->listener != nullptr) {
+            receiver->listener->onReceiverStarted(port);
+        }
+    };
+    receiver->server.run(wait);
+    /*if (listener != nullptr) {
         listener->onReceiverStarted(port);
+    }*/
+}
+
+namespace flowdrop {
+    Receiver::Receiver(const DeviceInfo &deviceInfo) {
+        pImpl = new ReceiverImpl();
+        pImpl->deviceInfo = deviceInfo;
     }
 
-    hv::HttpServer server(&router);
-    server.setPort(port);
-    server.setThreadNum(4);
-    server.run();
+    Receiver::~Receiver() {
+        delete pImpl;
+    }
+
+    const DeviceInfo &Receiver::getDeviceInfo() const {
+        return pImpl->deviceInfo;
+    }
+
+    void Receiver::setDestDir(const std::filesystem::path &destDir) {
+        pImpl->destDir = destDir;
+    }
+
+    const std::filesystem::path &Receiver::getDestDir() const {
+        return pImpl->destDir;
+    }
+
+    void Receiver::setAskCallback(const askCallback &askCallback) {
+        pImpl->askCallback = askCallback;
+    }
+
+    const askCallback &Receiver::getAskCallback() const {
+        return pImpl->askCallback;
+    }
+
+    void Receiver::setEventListener(IEventListener *listener) {
+        pImpl->listener = listener;
+    }
+
+    IEventListener *Receiver::getEventListener() {
+        return pImpl->listener;
+    }
+
+    void Receiver::run(bool wait) {
+        receive(pImpl, wait);
+    }
+
+    void Receiver::stop() {
+        pImpl->stop();
+    }
 }

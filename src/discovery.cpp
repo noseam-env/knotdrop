@@ -14,16 +14,16 @@
 #include "hv/axios.h"
 #include "curl/curl.h"
 
-size_t curl_write_function(void* contents, size_t size, size_t nmemb, std::string* output) {
+size_t curl_write_function(void *contents, size_t size, size_t nmemb, std::string *output) {
     size_t totalSize = size * nmemb;
-    output->append(static_cast<char*>(contents), totalSize);
+    output->append(static_cast<char *>(contents), totalSize);
     return totalSize;
 }
 
-void announce(int port) {
+void announce(const std::string &id, int port, std::atomic<bool> &stopFlag) {
     std::unordered_map<std::string, std::string> txt;
     txt["v"] = std::to_string(flowdrop_version);
-    registerService(flowdrop::thisDeviceInfo.id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt);
+    registerService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt, stopFlag);
 }
 
 void resolve(const std::string &id, const resolveCallback &callback) {
@@ -36,7 +36,7 @@ void resolve(const std::string &id, const resolveCallback &callback) {
     });
 }
 
-void flowdrop::find(const flowdrop::findCallback &callback) {
+void flowdrop::find(const flowdrop::findCallback &callback, std::atomic<bool>& stopFlag) {
     std::set<std::string> foundServices;
 
     findService(flowdrop_reg_type, flowdrop_dns_domain, [callback, &foundServices](const FindReply &findReply) {
@@ -58,7 +58,7 @@ void flowdrop::find(const flowdrop::findCallback &callback) {
 
             curl_global_init(CURL_GLOBAL_NOTHING);
 
-            CURL* curl = curl_easy_init();
+            CURL *curl = curl_easy_init();
             if (!curl) {
                 std::cerr << "Failed to initialize curl" << std::endl;
                 return;
@@ -94,5 +94,10 @@ void flowdrop::find(const flowdrop::findCallback &callback) {
 
             callback(deviceInfo);
         });
-    });
+    }, stopFlag);
+}
+
+void flowdrop::find(const flowdrop::findCallback &callback) {
+    std::atomic<bool> stopFlag(false);
+    flowdrop::find(callback, stopFlag);
 }
