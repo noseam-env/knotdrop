@@ -151,17 +151,17 @@ namespace flowdrop {
 
         const DeviceInfo &getDeviceInfo() const;
 
-        void setDestDir(const std::filesystem::path &);
-
         const std::filesystem::path &getDestDir() const;
 
-        void setAskCallback(const askCallback &);
+        void setDestDir(const std::filesystem::path &);
 
         const askCallback &getAskCallback() const;
 
-        void setEventListener(IEventListener *);
+        void setAskCallback(const askCallback &);
 
         IEventListener *getEventListener();
+
+        void setEventListener(IEventListener *);
 
         void run(bool wait = true);
 
