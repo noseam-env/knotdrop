@@ -17,8 +17,6 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(LIBFLOWDROP_SOURCES
         src/dns_sd/dns_sd_wrapper.hpp
-        src/dns_sd/dns_sd_wrapper_avahi.cpp
-        src/dns_sd/dns_sd_wrapper_apple.cpp
         src/discovery.cpp
         src/discovery.hpp
         src/portroller.cpp
@@ -46,6 +44,7 @@ add_subdirectory(ThirdParty/libvirtualtfa)
 add_subdirectory(ThirdParty/nlohmann_json)
 
 if (USE_APPLE_DNS_SD)
+    set(LIBFLOWDROP_SOURCES ${LIBFLOWDROP_SOURCES} src/dns_sd/dns_sd_wrapper_apple.cpp)
     if (WIN32)
         set(BONJOUR_SDK_HOME "$ENV{BONJOUR_SDK_HOME}")
         if (NOT BONJOUR_SDK_HOME)
