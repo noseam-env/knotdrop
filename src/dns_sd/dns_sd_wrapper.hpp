@@ -10,7 +10,7 @@
 
 #include <functional>
 
-#if defined(ANDROID)
+#if defined(ANDROID) || defined(__APPLE__)
 #include <unordered_map>
 #endif
 
