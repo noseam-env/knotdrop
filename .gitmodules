@@ -1,3 +1,6 @@
 [submodule "ThirdParty/libvirtualtfa"]
 	path = ThirdParty/libvirtualtfa
-	url = https://github.com/FlowDrop/libvirtualtfa
+	url = https://github.com/noseam-env/libvirtualtfa
+[submodule "ThirdParty/libknotdnssd"]
+	path = ThirdParty/libknotdnssd
+	url = https://github.com/noseam-env/libknotdnssd

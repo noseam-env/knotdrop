@@ -2,12 +2,12 @@
  * This file is part of libflowdrop.
  *
  * For license and copyright information please follow this link:
- * https://github.com/FlowDrop/libflowdrop/blob/master/LEGAL
+ * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
 #include <iostream>
 #include <set>
-#include "dns_sd/dns_sd_wrapper.hpp"
+#include "knot/dnssd.h"
 #include "flowdrop.hpp"
 #include "discovery.hpp"
 #include "specification.hpp"
