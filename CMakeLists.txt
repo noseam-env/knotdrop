@@ -11,6 +11,7 @@ project(libflowdrop)
 
 option(LIBFLOWDROP_BUILD_STATIC "BUILD STATIC LIBRARIES" ON)
 option(LIBFLOWDROP_BUILD_SHARED "BUILD SHARED LIBRARIES" ON)
+option(ENABLE_KNOT_DNSSD "ENABLE KNOT DNS-SD" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -27,9 +28,12 @@ set(LIBFLOWDROP_SOURCES
 set(LIBFLOWDROP_LIBS
         libcurl
         hv_static
-        knotdnssd_static
         virtualtfa_static
         nlohmann_json::nlohmann_json)
+
+if (ENABLE_KNOT_DNSSD)
+    list(APPEND LIBFLOWDROP_LIBS knotdnssd_static)
+endif ()
 
 set(LIBFLOWDROP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
@@ -39,13 +43,15 @@ set(VIRTUALTFA_BUILD_SHARED OFF)
 
 add_subdirectory(ThirdParty/curl)
 add_subdirectory(ThirdParty/libhv)
-add_subdirectory(ThirdParty/libknotdnssd)
+if (ENABLE_KNOT_DNSSD)
+    add_subdirectory(ThirdParty/libknotdnssd)
+endif ()
 add_subdirectory(ThirdParty/libvirtualtfa)
 add_subdirectory(ThirdParty/nlohmann_json)
 
 if (WIN32)
     option(BUILD_FOR_MT "build for /MT" OFF)
-    if(BUILD_FOR_MT)
+    if (BUILD_FOR_MT)
         # MultiThreaded
         # Compile with -MT or equivalent flag(s) to use a multi-threaded statically-linked runtime library.
         #
@@ -62,7 +68,7 @@ if (WIN32)
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
         set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-    endif()
+    endif ()
 
     list(APPEND LIBFLOWDROP_LIBS ws2_32 ntdll)
 endif ()
