@@ -15,6 +15,7 @@
 #include "virtualtfa.hpp"
 #include <set>
 #include <utility>
+#include <atomic>
 
 class ReceiveProgressListener : public IProgressListener {
 public:
