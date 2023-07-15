@@ -57,46 +57,26 @@ namespace flowdrop {
 
         // sender
         virtual void onResolving() {}
-
         virtual void onReceiverNotFound() {}
-
         virtual void onResolved() {}
-
         virtual void onAskingReceiver() {}
-
         virtual void onReceiverDeclined() {}
-
         virtual void onReceiverAccepted() {}
-
         virtual void onSendingStart() {}
-
         virtual void onSendingTotalProgress(std::size_t totalSize, std::size_t currentSize) {}
-
         virtual void onSendingFileStart(const FileInfo &fileInfo) {}
-
         virtual void onSendingFileProgress(const FileInfo &fileInfo, std::size_t currentSize) {}
-
         virtual void onSendingFileEnd(const FileInfo &fileInfo) {}
-
         virtual void onSendingEnd() {}
 
         // receiver
         virtual void onReceiverStarted(unsigned short port) {}
-
         virtual void onSenderAsk(const DeviceInfo &sender) {}
-
         virtual void onReceivingStart(const DeviceInfo &sender, std::size_t totalSize) {}
-
-        virtual void
-        onReceivingTotalProgress(const DeviceInfo &sender, std::size_t totalSize, std::size_t receivedSize) {}
-
+        virtual void onReceivingTotalProgress(const DeviceInfo &sender, std::size_t totalSize, std::size_t receivedSize) {}
         virtual void onReceivingFileStart(const DeviceInfo &sender, const FileInfo &fileInfo) {}
-
-        virtual void
-        onReceivingFileProgress(const DeviceInfo &sender, const FileInfo &fileInfo, std::size_t receivedSize) {}
-
+        virtual void onReceivingFileProgress(const DeviceInfo &sender, const FileInfo &fileInfo, std::size_t receivedSize) {}
         virtual void onReceivingFileEnd(const DeviceInfo &sender, const FileInfo &fileInfo) {}
-
         virtual void onReceivingEnd(const DeviceInfo &sender, std::size_t totalSize) {}
     };
 
@@ -107,6 +87,30 @@ namespace flowdrop {
     void find(const findCallback &callback);
 
     class SendRequest {
+    public:
+        SendRequest();
+        ~SendRequest();
+
+        [[nodiscard]] DeviceInfo getDeviceInfo() const;
+        SendRequest &setDeviceInfo(const DeviceInfo &info);
+
+        [[nodiscard]] std::string getReceiverId() const;
+        SendRequest &setReceiverId(const std::string &id);
+
+        [[nodiscard]] std::vector<std::string> getFiles() const;
+        SendRequest& setFiles(const std::vector<std::string>& files);
+
+        [[nodiscard]] std::chrono::milliseconds getResolveTimeout() const;
+        SendRequest &setResolveTimeout(const std::chrono::milliseconds &timeout);
+
+        [[nodiscard]] std::chrono::milliseconds getAskTimeout() const;
+        SendRequest &setAskTimeout(const std::chrono::milliseconds &timeout);
+
+        [[nodiscard]] IEventListener* getEventListener() const;
+        SendRequest &setEventListener(IEventListener *listener);
+
+        bool execute();
+
     private:
         DeviceInfo deviceInfo;
         std::string receiverId;
@@ -114,61 +118,32 @@ namespace flowdrop {
         std::chrono::milliseconds resolveTimeout;
         std::chrono::milliseconds askTimeout;
         IEventListener *eventListener;
-
-    public:
-        SendRequest();
-
-        DeviceInfo getDeviceInfo() const;
-        SendRequest &setDeviceInfo(const DeviceInfo &info);
-
-        std::string getReceiverId() const;
-        SendRequest &setReceiverId(const std::string &id);
-
-        std::vector<std::string> getFiles() const;
-        SendRequest& setFiles(const std::vector<std::string>& files);
-
-        std::chrono::milliseconds getResolveTimeout() const;
-        SendRequest &setResolveTimeout(const std::chrono::milliseconds &timeout);
-
-        std::chrono::milliseconds getAskTimeout() const;
-        SendRequest &setAskTimeout(const std::chrono::milliseconds &timeout);
-
-        IEventListener* getEventListener() const;
-        SendRequest &setEventListener(IEventListener *listener);
-
-        bool execute();
     };
 
     using askCallback = std::function<bool(const SendAsk &)>;
 
-    class ReceiverImpl;
-
     class Receiver {
     public:
         Receiver(const DeviceInfo &);
-
         ~Receiver();
 
-        const DeviceInfo &getDeviceInfo() const;
+        [[nodiscard]] const DeviceInfo &getDeviceInfo() const;
 
         void setDestDir(const std::filesystem::path &);
-
-        const std::filesystem::path &getDestDir() const;
+        [[nodiscard]] const std::filesystem::path &getDestDir() const;
 
         void setAskCallback(const askCallback &);
-
-        const askCallback &getAskCallback() const;
+        [[nodiscard]] const askCallback &getAskCallback() const;
 
         void setEventListener(IEventListener *);
-
         IEventListener *getEventListener();
 
         void run(bool wait = true);
-
         void stop();
 
     private:
-        ReceiverImpl *pImpl;
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
     };
 }
 

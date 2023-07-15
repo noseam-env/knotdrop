@@ -4,12 +4,6 @@
  * For license and copyright information please follow this link:
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
+#pragma once
 
-#ifndef LIBFLOWDROP_PORTROLLER_HPP
-#define LIBFLOWDROP_PORTROLLER_HPP
-
-
-unsigned short rollAvailablePort();
-
-
-#endif //LIBFLOWDROP_PORTROLLER_HPP
+unsigned short rollAvailablePort(unsigned short defaultPort);

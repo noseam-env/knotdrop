@@ -5,13 +5,12 @@
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
-#include <random>
 #include "portroller.hpp"
-#include "specification.hpp"
+#include <random>
 
 #if defined(_WIN32)
 
-#include <winsock2.h>
+#include <WinSock2.h>
 
 #elif defined(__linux__) || defined(__APPLE__)
 
@@ -25,6 +24,7 @@
 
 const int MIN_PORT = 1024;
 const int MAX_PORT = 65536;
+const int MAX_ATTEMPTS = 16;
 
 void randomizePort(sockaddr_in addr) {
     std::random_device rd;
@@ -34,9 +34,9 @@ void randomizePort(sockaddr_in addr) {
     addr.sin_port = htons(newPort);
 }
 
-unsigned short rollAvailablePort() {
+unsigned short rollAvailablePort(unsigned short defaultPort) {
 #if defined(_WIN32)
-    // initialize Winsock
+    // initialize WinSock
     WSADATA wsaData;
     int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0) {
@@ -54,12 +54,20 @@ unsigned short rollAvailablePort() {
     sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(flowdrop_default_port);
+    addr.sin_port = htons(defaultPort);
+
+    int attempts = 0;
     while (bind(sock, (sockaddr *) &addr, sizeof(addr)) == SOCKET_ERROR) {
         randomizePort(addr);
+        attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+            closesocket(sock);
+            WSACleanup();
+            throw std::exception("Failed to find an available port");
+        }
     }
 
-    // release the socket and clean up Winsock
+    // release the socket and clean up WinSock
     closesocket(sock);
     WSACleanup();
 

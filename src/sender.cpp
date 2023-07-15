@@ -243,7 +243,8 @@ bool send(const std::string &receiverId, const std::vector<std::string> &files,
 }
 
 namespace flowdrop {
-    SendRequest::SendRequest() {}
+    SendRequest::SendRequest() = default;
+    SendRequest::~SendRequest() = default;
 
     SendRequest& SendRequest::setDeviceInfo(const DeviceInfo& info) {
         deviceInfo = info;

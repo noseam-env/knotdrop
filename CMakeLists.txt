@@ -25,11 +25,13 @@ set(LIBFLOWDROP_SOURCES
         src/specification.hpp
         src/core.cpp)
 
-set(LIBFLOWDROP_LIBS
+set(LIBFLOWDROP_PUBLIC_LIBS
+        nlohmann_json::nlohmann_json)
+
+set(LIBFLOWDROP_PRIVATE_LIBS
         libcurl
         hv_static
-        virtualtfa_static
-        nlohmann_json::nlohmann_json)
+        virtualtfa_static)
 
 if (ENABLE_KNOT_DNSSD)
     list(APPEND LIBFLOWDROP_LIBS knotdnssd_static)
@@ -82,11 +84,13 @@ if (LIBFLOWDROP_BUILD_SHARED)
     add_library(libflowdrop_shared SHARED ${LIBFLOWDROP_SOURCES})
     target_include_directories(libflowdrop_shared PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_shared PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
-    target_link_libraries(libflowdrop_shared PRIVATE ${LIBFLOWDROP_LIBS})
+    target_link_libraries(libflowdrop_shared PUBLIC ${LIBFLOWDROP_PUBLIC_LIBS})
+    target_link_libraries(libflowdrop_shared PRIVATE ${LIBFLOWDROP_PRIVATE_LIBS})
 endif ()
 if (LIBFLOWDROP_BUILD_STATIC)
     add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
     target_include_directories(libflowdrop_static PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_static PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
-    target_link_libraries(libflowdrop_static PRIVATE ${LIBFLOWDROP_LIBS})
+    target_link_libraries(libflowdrop_static PUBLIC ${LIBFLOWDROP_PUBLIC_LIBS})
+    target_link_libraries(libflowdrop_static PRIVATE ${LIBFLOWDROP_PRIVATE_LIBS})
 endif ()
