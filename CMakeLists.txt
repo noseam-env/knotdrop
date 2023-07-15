@@ -43,11 +43,13 @@ set(LIBFLOWDROP_TARGET_INCLUDE ${LIBHV_HEADERS})
 
 set(VIRTUALTFA_BUILD_SHARED OFF)
 
-add_subdirectory(ThirdParty/curl)
-add_subdirectory(ThirdParty/libhv)
 if (ENABLE_KNOT_DNSSD)
     add_subdirectory(ThirdParty/libknotdnssd)
+    list(APPEND LIBFLOWDROP_PRIVATE_LIBS knotdnssd_static)
 endif ()
+
+add_subdirectory(ThirdParty/curl)
+add_subdirectory(ThirdParty/libhv)
 add_subdirectory(ThirdParty/libvirtualtfa)
 add_subdirectory(ThirdParty/nlohmann_json)
 
@@ -72,7 +74,7 @@ if (WIN32)
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
     endif ()
 
-    list(APPEND LIBFLOWDROP_LIBS ws2_32 ntdll)
+    list(APPEND LIBFLOWDROP_PRIVATE_LIBS ws2_32 ntdll)
 endif ()
 
 if (UNIX)
