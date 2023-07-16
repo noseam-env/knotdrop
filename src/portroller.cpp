@@ -63,7 +63,7 @@ unsigned short rollAvailablePort(unsigned short defaultPort) {
         if (attempts >= MAX_ATTEMPTS) {
             closesocket(sock);
             WSACleanup();
-            throw std::exception("Failed to find an available port");
+            throw std::runtime_error("Failed to find an available port");
         }
     }
 
@@ -82,9 +82,16 @@ unsigned short rollAvailablePort(unsigned short defaultPort) {
     std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(flowdrop_default_port);
+    addr.sin_port = htons(defaultPort);
+
+    int attempts = 0;
     while (bind(sockfd, (sockaddr *) &addr, sizeof(addr)) == -1) {
         randomizePort(addr);
+        attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+            close(sockfd);
+            throw std::runtime_error("Failed to find an available port");
+        }
     }
 
     close(sockfd);
