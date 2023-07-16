@@ -33,10 +33,6 @@ set(LIBFLOWDROP_PRIVATE_LIBS
         hv_static
         virtualtfa_static)
 
-if (ENABLE_KNOT_DNSSD)
-    list(APPEND LIBFLOWDROP_LIBS knotdnssd_static)
-endif ()
-
 set(LIBFLOWDROP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(LIBFLOWDROP_TARGET_INCLUDE ${LIBHV_HEADERS})
