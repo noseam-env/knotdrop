@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 cmake_policy(SET CMP0077 NEW)
 
-project(libflowdrop)
+project(libflowdrop LANGUAGES CXX)
 
 option(LIBFLOWDROP_BUILD_STATIC "BUILD STATIC LIBRARIES" ON)
 option(LIBFLOWDROP_BUILD_SHARED "BUILD SHARED LIBRARIES" ON)
@@ -37,12 +37,12 @@ set(LIBFLOWDROP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(LIBFLOWDROP_TARGET_INCLUDE ${LIBHV_HEADERS})
 
-set(VIRTUALTFA_BUILD_SHARED OFF)
-
 if (ENABLE_KNOT_DNSSD)
     add_subdirectory(ThirdParty/libknotdnssd)
     list(APPEND LIBFLOWDROP_PRIVATE_LIBS knotdnssd_static)
 endif ()
+
+set(VIRTUALTFA_BUILD_SHARED OFF)
 
 add_subdirectory(ThirdParty/curl)
 add_subdirectory(ThirdParty/libhv)
