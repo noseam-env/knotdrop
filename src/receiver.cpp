@@ -19,12 +19,12 @@
 
 class ReceiveProgressListener : public IProgressListener {
 public:
-    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener) :
-            m_sender(std::move(sender)), m_eventListener(eventListener) {}
+    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, std::size_t totalSize) :
+            m_sender(std::move(sender)), m_eventListener(eventListener), m_totalSize(totalSize) {}
 
     void totalProgress(std::size_t currentSize) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingTotalProgress(m_sender, 0, currentSize);
+            m_eventListener->onReceivingTotalProgress(m_sender, m_totalSize, currentSize);
         }
     }
 
@@ -49,6 +49,7 @@ public:
 private:
     flowdrop::DeviceInfo m_sender;
     flowdrop::IEventListener *m_eventListener;
+    std::size_t m_totalSize;
 };
 
 struct ReceiveSession {
@@ -129,13 +130,13 @@ namespace flowdrop {
                         ctx->close();
                         return HTTP_STATUS_BAD_REQUEST;
                     }
-                    std::size_t totalSize;
                     flowdrop::DeviceInfo sender;
+                    std::size_t totalSize;
                     try {
-                        totalSize = std::stoull(it->second);
-
                         json jsonData = json::parse(senderStr);
                         flowdrop::from_json(jsonData, sender);
+
+                        totalSize = std::stoull(it->second);
                     } catch (std::exception &) {
                         ctx->close();
                         return HTTP_STATUS_BAD_REQUEST;
@@ -148,7 +149,7 @@ namespace flowdrop {
                         std::cerr << "Destination path is not directory" << std::endl;
                         return HTTP_STATUS_INTERNAL_SERVER_ERROR;
                     }
-                    auto tfa = new VirtualTfaReader(_destDir, new ReceiveProgressListener(sender, _listener));
+                    auto tfa = new VirtualTfaReader(_destDir, new ReceiveProgressListener(sender, _listener, totalSize));
                     session = new ReceiveSession{
                             sender,
                             tfa,
