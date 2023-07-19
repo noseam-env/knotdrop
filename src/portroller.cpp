@@ -34,6 +34,11 @@ private:
     std::unique_ptr<Impl> pImpl;
 };
 
+/**
+ * Here you can reuse the code, but I plan to make a library to simplify
+ * cross-platform and implementations for each platform will be separate
+ */
+
 #if defined(_WIN32)
 
 class ServerSocket::Impl {
@@ -67,6 +72,10 @@ private:
 ServerSocket::ServerSocket() : pImpl(new Impl) {}
 ServerSocket::~ServerSocket() = default;
 
+bool ServerSocket::bind(const struct sockaddr *addr, unsigned int len) {
+    return pImpl->bind(addr, len);
+}
+
 #else
 
 class ServerSocket::Impl {
@@ -98,9 +107,9 @@ bool ServerSocket::bind(const struct sockaddr *addr, unsigned int len) {
 
 #endif
 
-//
-// portroller code
-//
+/**
+ * portroller code
+ */
 
 #include <random>
 
