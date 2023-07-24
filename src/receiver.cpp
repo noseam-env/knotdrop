@@ -19,28 +19,28 @@
 
 class ReceiveProgressListener : public IProgressListener {
 public:
-    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, std::size_t totalSize) :
+    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, std::uint64_t totalSize) :
             m_sender(std::move(sender)), m_eventListener(eventListener), m_totalSize(totalSize) {}
 
-    void totalProgress(std::size_t currentSize) override {
+    void totalProgress(std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onReceivingTotalProgress(m_sender, m_totalSize, currentSize);
         }
     }
 
-    void fileStart(char *fileName, std::size_t fileSize) override {
+    void fileStart(char *fileName, std::uint64_t fileSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onReceivingFileStart(m_sender, {fileName, fileSize});
         }
     }
 
-    void fileProgress(char *fileName, std::size_t fileSize, std::size_t currentSize) override {
+    void fileProgress(char *fileName, std::uint64_t fileSize, std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onReceivingFileProgress(m_sender, {fileName, fileSize}, currentSize);
         }
     }
 
-    void fileEnd(char *fileName, std::size_t fileSize) override {
+    void fileEnd(char *fileName, std::uint64_t fileSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onReceivingFileEnd(m_sender, {fileName, fileSize});
         }
@@ -49,13 +49,13 @@ public:
 private:
     flowdrop::DeviceInfo m_sender;
     flowdrop::IEventListener *m_eventListener;
-    std::size_t m_totalSize;
+    std::uint64_t m_totalSize;
 };
 
 struct ReceiveSession {
     flowdrop::DeviceInfo sender{};
     VirtualTfaReader *tfa = nullptr;
-    std::size_t totalSize{};
+    std::uint64_t totalSize{};
 };
 
 namespace flowdrop {
@@ -67,6 +67,7 @@ namespace flowdrop {
         std::thread _sdThread;
         std::atomic<bool> *_sdStop = nullptr;
         hv::HttpServer _server;
+        std::unordered_map<std::string, std::string> _accessKeys;
 
         void askHandler(const HttpRequestPtr &req, const HttpResponseWriterPtr &writer) {
             if (flowdrop::debug) {
@@ -93,6 +94,8 @@ namespace flowdrop {
             }
 
             bool accepted = _askCallback == nullptr || _askCallback(sendAsk);
+
+            //_accessKeys.insert("test", req->Host());
 
             if (flowdrop::debug) {
                 std::cout << "ask_accepted: " << req->Host() << std::endl;
@@ -131,7 +134,7 @@ namespace flowdrop {
                         return HTTP_STATUS_BAD_REQUEST;
                     }
                     flowdrop::DeviceInfo sender;
-                    std::size_t totalSize;
+                    std::uint64_t totalSize;
                     try {
                         json jsonData = json::parse(senderStr);
                         flowdrop::from_json(jsonData, sender);

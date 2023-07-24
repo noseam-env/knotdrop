@@ -23,7 +23,7 @@ set(LIBFLOWDROP_SOURCES
         src/receiver.cpp
         src/sender.cpp
         src/specification.hpp
-        src/core.cpp)
+        src/core.cpp src/os_util.cpp src/os_util.h)
 
 set(LIBFLOWDROP_PUBLIC_LIBS
         nlohmann_json::nlohmann_json)

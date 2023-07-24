@@ -23,23 +23,10 @@ size_t writeCallback(char *data, size_t size, size_t nmemb, std::string *respons
     return totalSize;
 }
 
-bool ask(const std::string &baseUrl, const std::vector<std::string> &files, const std::chrono::milliseconds &timeout, const flowdrop::DeviceInfo &deviceInfo) {
-    std::vector<flowdrop::FileInfo> filesInfo(files.size());
-    for (size_t i = 0; i < files.size(); ++i) {
-        std::ifstream file(files[i], std::ios::binary | std::ios::ate);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open file: " << files[i] << std::endl;
-            return false;
-        }
-        std::streampos fileSize = file.tellg();
-        filesInfo[i].name = files[i];
-        filesInfo[i].size = static_cast<std::size_t>(fileSize);
-        file.close();
-    }
-
+bool ask(const std::string &baseUrl, const std::vector<flowdrop::FileInfo> &files, const std::chrono::milliseconds &timeout, const flowdrop::DeviceInfo &deviceInfo) {
     flowdrop::SendAsk askData;
     askData.sender = deviceInfo;
-    askData.files = filesInfo;
+    askData.files = files;
 
     std::string jsonData = json(askData).dump();
 
@@ -95,51 +82,83 @@ class SendProgressListener : public IProgressListener {
 public:
     SendProgressListener(flowdrop::IEventListener *eventListener) : m_eventListener(eventListener) {}
 
-    void totalProgress(std::size_t currentSize) override {
+    void totalProgress(std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onSendingTotalProgress(m_totalSize, currentSize);
         }
     }
 
-    void fileStart(char *fileName, std::size_t fileSize) override {
+    void fileStart(char *fileName, std::uint64_t fileSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onSendingFileStart({fileName, fileSize});
         }
     }
 
-    void fileProgress(char *fileName, std::size_t fileSize, std::size_t currentSize) override {
+    void fileProgress(char *fileName, std::uint64_t fileSize, std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onSendingFileProgress({fileName, fileSize}, currentSize);
         }
     }
 
-    void fileEnd(char *fileName, std::size_t fileSize) override {
+    void fileEnd(char *fileName, std::uint64_t fileSize) override {
         if (m_eventListener != nullptr) {
             m_eventListener->onSendingFileEnd({fileName, fileSize});
         }
     }
 
-    void setTotalSize(std::size_t totalSize) {
+    void setTotalSize(std::uint64_t totalSize) {
         SendProgressListener::m_totalSize = totalSize;
     }
 
 private:
     flowdrop::IEventListener *m_eventListener;
-    std::size_t m_totalSize = 0;
+    std::uint64_t m_totalSize = 0;
 };
 
-void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files, flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
+class FileAdapter : public VirtualFile {
+public:
+    explicit FileAdapter(flowdrop::File *file) : m_file(file) {}
+    ~FileAdapter() override = default;
+
+    [[nodiscard]] std::string getRelativePath() const override {
+        return m_file->getRelativePath();
+    }
+    [[nodiscard]] std::uint64_t getSize() const override {
+        return m_file->getSize();
+    }
+    [[nodiscard]] std::uint64_t getCreatedTime() const override {
+        return m_file->getCreatedTime();
+    }
+    [[nodiscard]] std::uint64_t getModifiedTime() const override {
+        return m_file->getModifiedTime();
+    }
+    [[nodiscard]] std::filesystem::file_status getStatus() const override {
+        return m_file->getStatus();
+    }
+    void seek(std::uint64_t pos) override {
+        m_file->seek(pos);
+    }
+    std::uint64_t read(char* buffer, std::uint64_t count) override {
+        return m_file->read(buffer, count);
+    }
+
+private:
+    flowdrop::File *m_file;
+};
+
+void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files, flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     VirtualTfaArchive *archive = virtual_tfa_archive_new();
 
-    for (const std::string &filePath: files) {
-        VirtualTfaEntry *entry = virtual_tfa_entry_new(filePath);
+    for (flowdrop::File *file: files) {
+        FileAdapter fileAdapter(file);
+        VirtualTfaEntry *entry = virtual_tfa_entry_new(fileAdapter);
         virtual_tfa_archive_add(archive, entry);
     }
 
     auto *sendProgressListener = new SendProgressListener(listener);
     auto *tfa = new VirtualTfaWriter(archive, sendProgressListener);
 
-    std::size_t totalSize = tfa->calcSize();
+    std::uint64_t totalSize = tfa->calcSize();
     sendProgressListener->setTotalSize(totalSize);
 
     if (listener != nullptr) {
@@ -175,7 +194,7 @@ void sendFiles(const std::string &baseUrl, const std::vector<std::string> &files
     virtual_tfa_archive_close(archive);
 }
 
-bool askAndSend(const Address &address, const std::vector<std::string> &files, const std::chrono::milliseconds askTimeout,
+bool askAndSend(const Address &address, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,
                 flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     std::string baseUrl = "http://" + address.host + ":" + std::to_string(address.port) + "/";
 
@@ -183,7 +202,12 @@ bool askAndSend(const Address &address, const std::vector<std::string> &files, c
         listener->onAskingReceiver();
     }
 
-    if (!ask(baseUrl, files, askTimeout, deviceInfo)) {
+    std::vector<flowdrop::FileInfo> filesInfo(files.size());
+    for (size_t i = 0; i < files.size(); ++i) {
+        filesInfo[i].name = files[i]->getRelativePath();
+        filesInfo[i].size = files[i]->getSize();
+    }
+    if (!ask(baseUrl, filesInfo, askTimeout, deviceInfo)) {
         if (listener != nullptr) {
             listener->onReceiverDeclined();
         }
@@ -203,7 +227,7 @@ bool askAndSend(const Address &address, const std::vector<std::string> &files, c
     return true;
 }
 
-bool send(const std::string &receiverId, const std::vector<std::string> &files,
+bool send(const std::string &receiverId, std::vector<flowdrop::File *> &files,
           const std::chrono::milliseconds &resolveTimeout, const std::chrono::milliseconds &askTimeout,
           flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     if (listener != nullptr) {
@@ -256,7 +280,7 @@ namespace flowdrop {
         return *this;
     }
 
-    SendRequest& SendRequest::setFiles(const std::vector<std::string>& files) {
+    SendRequest& SendRequest::setFiles(const std::vector<File *>& files) {
         this->files = files;
         return *this;
     }
@@ -284,7 +308,7 @@ namespace flowdrop {
         return receiverId;
     }
 
-    std::vector<std::string> SendRequest::getFiles() const {
+    std::vector<File *> SendRequest::getFiles() const {
         return files;
     }
 

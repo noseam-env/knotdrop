@@ -7,7 +7,13 @@
 
 #include <utility>
 #include <sstream>
+#include <iostream>
 #include "flowdrop.hpp"
+#include "os_util.h"
+
+#if defined(__clang__)
+#include "sys/stat.h"
+#endif
 
 void getJsonOptionalString(const json &j, const std::string &key, std::optional<std::string> &strOpt) {
     if (j.count(key) != 0) {
@@ -95,6 +101,63 @@ namespace flowdrop {
     void from_json(const json &j, SendAsk &d) {
         j.at("sender").get_to(d.sender);
         j.at("files").get_to(d.files);
+    }
+
+    NativeFile::NativeFile(const std::filesystem::path &filePath, std::string relativePath) : filePath(filePath), relativePath(std::move(relativePath)) {
+        fileStream.open(filePath, std::ios::binary | std::ios::in);
+        if (!fileStream.is_open()) {
+            throw std::runtime_error("Error opening file: " + filePath.string());
+        }
+#if defined(_WIN32)
+        getFileTime(filePath.string().c_str(), &createdTime, &modifiedTime);
+#else
+        struct stat fileStat{};
+        if (stat(filePath.string().c_str(), &fileStat) == 0) {
+            createdTime = fileStat.st_mtime;
+            modifiedTime = fileStat.st_mtime;
+        }
+#endif
+        if (createdTime == 0) {
+            createdTime = std::time(nullptr);
+        }
+        if (modifiedTime == 0) {
+            modifiedTime = createdTime;
+        }
+    }
+
+    NativeFile::~NativeFile() {
+        if (fileStream.is_open()) {
+            fileStream.close();
+        }
+    }
+
+    std::string NativeFile::getRelativePath() const {
+        return relativePath;
+    }
+
+    std::uint64_t NativeFile::getSize() const {
+        return std::filesystem::file_size(filePath);
+    }
+
+    std::uint64_t NativeFile::getCreatedTime() const {
+        return createdTime;
+    }
+
+    std::uint64_t NativeFile::getModifiedTime() const {
+        return modifiedTime;
+    }
+
+    std::filesystem::file_status NativeFile::getStatus() const {
+        return std::filesystem::status(filePath);
+    }
+
+    void NativeFile::seek(std::uint64_t pos) {
+        fileStream.seekg(static_cast<std::streamoff>(pos));
+    }
+
+    std::uint64_t NativeFile::read(char* buffer, std::uint64_t count) {
+        fileStream.read(buffer, static_cast<std::streamsize>(count));
+        return fileStream.gcount();
     }
 
 }
