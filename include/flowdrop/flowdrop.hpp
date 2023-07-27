@@ -81,64 +81,12 @@ namespace flowdrop {
         virtual void onReceivingEnd(const DeviceInfo &sender, std::uint64_t totalSize) {}
     };
 
-    using findCallback = std::function<void(const DeviceInfo &)>;
-
-    void find(const findCallback &callback, std::atomic<bool>& stopFlag);
-
-    void find(const findCallback &callback);
-
-    class File {
-    public:
-        virtual ~File() = default;
-        [[nodiscard]] virtual std::string getRelativePath() const = 0;
-        [[nodiscard]] virtual std::uint64_t getSize() const = 0;
-        [[nodiscard]] virtual std::uint64_t getCreatedTime() const = 0; // UNIX time (__time64_t)
-        [[nodiscard]] virtual std::uint64_t getModifiedTime() const = 0; // UNIX time (__time64_t)
-        [[nodiscard]] virtual std::filesystem::file_status getStatus() const = 0;
-        virtual void seek(std::uint64_t pos) = 0;
-        virtual std::uint64_t read(char *buffer, std::uint64_t count) = 0;
-    };
-
-    class SendRequest {
-    public:
-        SendRequest();
-        ~SendRequest();
-
-        [[nodiscard]] DeviceInfo getDeviceInfo() const;
-        SendRequest &setDeviceInfo(const DeviceInfo &info);
-
-        [[nodiscard]] std::string getReceiverId() const;
-        SendRequest &setReceiverId(const std::string &id);
-
-        [[nodiscard]] std::vector<File *> getFiles() const;
-        SendRequest& setFiles(const std::vector<File *>& files);
-
-        [[nodiscard]] std::chrono::milliseconds getResolveTimeout() const;
-        SendRequest &setResolveTimeout(const std::chrono::milliseconds &timeout);
-
-        [[nodiscard]] std::chrono::milliseconds getAskTimeout() const;
-        SendRequest &setAskTimeout(const std::chrono::milliseconds &timeout);
-
-        [[nodiscard]] IEventListener* getEventListener() const;
-        SendRequest &setEventListener(IEventListener *listener);
-
-        bool execute();
-
-    private:
-        DeviceInfo deviceInfo;
-        std::string receiverId;
-        std::vector<File *> files;
-        std::chrono::milliseconds resolveTimeout;
-        std::chrono::milliseconds askTimeout;
-        IEventListener *eventListener;
-    };
-
     using askCallback = std::function<bool(const SendAsk &)>;
 
-    class Receiver {
+    class Server {
     public:
-        explicit Receiver(const DeviceInfo &);
-        ~Receiver();
+        explicit Server(const DeviceInfo &);
+        ~Server();
 
         [[nodiscard]] const DeviceInfo &getDeviceInfo() const;
 
@@ -159,6 +107,58 @@ namespace flowdrop {
         std::unique_ptr<Impl> pImpl;
     };
 
+    using findCallback = std::function<void(const DeviceInfo &)>;
+
+    void find(const findCallback &callback, std::atomic<bool>& stopFlag);
+
+    void find(const findCallback &callback);
+
+    class File {
+    public:
+        virtual ~File() = default;
+        [[nodiscard]] virtual std::string getRelativePath() const = 0;
+        [[nodiscard]] virtual std::uint64_t getSize() const = 0;
+        [[nodiscard]] virtual std::uint64_t getCreatedTime() const = 0; // UNIX time (__time64_t)
+        [[nodiscard]] virtual std::uint64_t getModifiedTime() const = 0; // UNIX time (__time64_t)
+        [[nodiscard]] virtual std::filesystem::perms getPermissions() const = 0;
+        virtual void seek(std::uint64_t pos) = 0;
+        virtual std::uint64_t read(char *buffer, std::uint64_t count) = 0;
+    };
+
+    class SendRequest {
+    public:
+        SendRequest();
+        ~SendRequest();
+
+        [[maybe_unused]] [[nodiscard]] DeviceInfo getDeviceInfo() const;
+        SendRequest &setDeviceInfo(const DeviceInfo &info);
+
+        [[maybe_unused]] [[nodiscard]] std::string getReceiverId() const;
+        SendRequest &setReceiverId(const std::string &id);
+
+        [[maybe_unused]] [[nodiscard]] std::vector<File *> getFiles() const;
+        SendRequest& setFiles(const std::vector<File *>& files);
+
+        [[maybe_unused]] [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getResolveTimeout() const;
+        SendRequest &setResolveTimeout(const std::chrono::milliseconds &timeout);
+
+        [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getAskTimeout() const;
+        SendRequest &setAskTimeout(const std::chrono::milliseconds &timeout);
+
+        [[maybe_unused]] [[nodiscard]] IEventListener* getEventListener() const;
+        SendRequest &setEventListener(IEventListener *listener);
+
+        bool execute();
+
+    private:
+        DeviceInfo deviceInfo;
+        std::string receiverId;
+        std::vector<File *> files;
+        std::chrono::milliseconds resolveTimeout;
+        std::chrono::milliseconds askTimeout;
+        IEventListener *eventListener;
+    };
+
     class NativeFile : public File {
     public:
         NativeFile(const std::filesystem::path& filePath, std::string relativePath);
@@ -167,18 +167,14 @@ namespace flowdrop {
         [[nodiscard]] std::uint64_t getSize() const override;
         [[nodiscard]] std::uint64_t getCreatedTime() const override;
         [[nodiscard]] std::uint64_t getModifiedTime() const override;
-        [[nodiscard]] std::filesystem::file_status getStatus() const override;
+        [[nodiscard]] std::filesystem::perms getPermissions() const override;
         void seek(std::uint64_t pos) override;
         std::uint64_t read(char *buffer, std::uint64_t count) override;
 
     private:
-        std::filesystem::path filePath;
-        std::string relativePath;
-        std::uint64_t createdTime;
-        std::uint64_t modifiedTime;
-        std::ifstream fileStream;
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
     };
 }
-
 
 #endif //LIBFLOWDROP_FLOWDROP_HPP

@@ -55,28 +55,28 @@ class HttpService {
     void Use(Handler handlerFunc);
 
     // 添加路由处理器
-    void Handle(const char* httpMethod, const char* relativePath, Handler handlerFunc);
+    void Handle(const char* httpMethod, const char* _relativePath, Handler handlerFunc);
 
     // 添加`HEAD`路由
-    void HEAD(const char* relativePath, Handler handlerFunc);
+    void HEAD(const char* _relativePath, Handler handlerFunc);
 
     // 添加`GET`路由
-    void GET(const char* relativePath, Handler handlerFunc);
+    void GET(const char* _relativePath, Handler handlerFunc);
 
     // 添加`POST`路由
-    void POST(const char* relativePath, Handler handlerFunc);
+    void POST(const char* _relativePath, Handler handlerFunc);
 
     // 添加`PUT`路由
-    void PUT(const char* relativePath, Handler handlerFunc);
+    void PUT(const char* _relativePath, Handler handlerFunc);
 
     // 添加`DELETE`路由
-    void Delete(const char* relativePath, Handler handlerFunc);
+    void Delete(const char* _relativePath, Handler handlerFunc);
 
     // 添加`PATCH`路由
-    void PATCH(const char* relativePath, Handler handlerFunc);
+    void PATCH(const char* _relativePath, Handler handlerFunc);
 
     // 添加任意`HTTP method`路由
-    void Any(const char* relativePath, Handler handlerFunc);
+    void Any(const char* _relativePath, Handler handlerFunc);
 
     // 返回注册的路由路径列表
     hv::StringList Paths();

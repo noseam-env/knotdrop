@@ -5,10 +5,10 @@
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
+#include "flowdrop/flowdrop.hpp"
 #include <utility>
 #include <sstream>
 #include <iostream>
-#include "flowdrop.hpp"
 #include "os_util.h"
 
 #if defined(__clang__)
@@ -103,61 +103,87 @@ namespace flowdrop {
         j.at("files").get_to(d.files);
     }
 
-    NativeFile::NativeFile(const std::filesystem::path &filePath, std::string relativePath) : filePath(filePath), relativePath(std::move(relativePath)) {
-        fileStream.open(filePath, std::ios::binary | std::ios::in);
-        if (!fileStream.is_open()) {
-            throw std::runtime_error("Error opening file: " + filePath.string());
+    class NativeFile::Impl {
+    public:
+        Impl(std::filesystem::path filePath, std::string relativePath) : _filePath(std::move(filePath)), _relativePath(std::move(relativePath)) {
+            _fileStream.open(_filePath, std::ios::binary | std::ios::in);
+            if (!_fileStream.is_open()) {
+                throw std::runtime_error("Error opening file: " + _filePath.string());
+            }
+            getFileTime(_filePath.string().c_str(), &_createdTime, &_modifiedTime);
+            if (_createdTime == 0) {
+                _createdTime = std::time(nullptr);
+            }
+            if (_modifiedTime == 0) {
+                _modifiedTime = _createdTime;
+            }
         }
-#if defined(_WIN32)
-        getFileTime(filePath.string().c_str(), &createdTime, &modifiedTime);
-#else
-        struct stat fileStat{};
-        if (stat(filePath.string().c_str(), &fileStat) == 0) {
-            createdTime = fileStat.st_mtime;
-            modifiedTime = fileStat.st_mtime;
-        }
-#endif
-        if (createdTime == 0) {
-            createdTime = std::time(nullptr);
-        }
-        if (modifiedTime == 0) {
-            modifiedTime = createdTime;
-        }
-    }
 
-    NativeFile::~NativeFile() {
-        if (fileStream.is_open()) {
-            fileStream.close();
+        ~Impl() {
+            if (_fileStream.is_open()) {
+                _fileStream.close();
+            }
         }
-    }
 
+        [[nodiscard]] std::string getRelativePath() const {
+            return _relativePath;
+        }
+
+        [[nodiscard]] std::uint64_t getSize() const {
+            return std::filesystem::file_size(_filePath);
+        }
+
+        [[nodiscard]] std::uint64_t getCreatedTime() const {
+            return _createdTime;
+        }
+
+        [[nodiscard]] std::uint64_t getModifiedTime() const {
+            return _modifiedTime;
+        }
+
+        [[nodiscard]] std::filesystem::file_status getStatus() const {
+            return std::filesystem::status(_filePath);
+        }
+
+        void seek(std::uint64_t pos) {
+            _fileStream.seekg(static_cast<std::streamoff>(pos));
+        }
+
+        std::uint64_t read(char *buffer, std::uint64_t count) {
+            _fileStream.read(buffer, static_cast<std::streamsize>(count));
+            return _fileStream.gcount();
+        }
+
+    private:
+        std::filesystem::path _filePath;
+        std::string _relativePath;
+        std::uint64_t _createdTime;
+        std::uint64_t _modifiedTime;
+        std::ifstream _fileStream;
+    };
+
+    NativeFile::NativeFile(const std::filesystem::path& filePath, std::string relativePath) : pImpl(new Impl(filePath, std::move(relativePath))) {}
+    NativeFile::~NativeFile() = default;
     std::string NativeFile::getRelativePath() const {
-        return relativePath;
+        return pImpl->getRelativePath();
     }
-
     std::uint64_t NativeFile::getSize() const {
-        return std::filesystem::file_size(filePath);
+        return pImpl->getSize();
     }
-
     std::uint64_t NativeFile::getCreatedTime() const {
-        return createdTime;
+        return pImpl->getCreatedTime();
     }
-
     std::uint64_t NativeFile::getModifiedTime() const {
-        return modifiedTime;
+        return pImpl->getModifiedTime();
     }
-
-    std::filesystem::file_status NativeFile::getStatus() const {
-        return std::filesystem::status(filePath);
+    std::filesystem::perms NativeFile::getPermissions() const {
+        return pImpl->getStatus().permissions();
     }
-
     void NativeFile::seek(std::uint64_t pos) {
-        fileStream.seekg(static_cast<std::streamoff>(pos));
+        return pImpl->seek(pos);
     }
-
     std::uint64_t NativeFile::read(char* buffer, std::uint64_t count) {
-        fileStream.read(buffer, static_cast<std::streamsize>(count));
-        return fileStream.gcount();
+        return pImpl->read(buffer, count);
     }
 
 }

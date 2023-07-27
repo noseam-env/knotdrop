@@ -5,7 +5,7 @@
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
-#include "flowdrop.hpp"
+#include "flowdrop/flowdrop.hpp"
 #include "hv/HttpServer.h"
 #include "hv/hlog.h"
 #include <thread>
@@ -58,8 +58,13 @@ struct ReceiveSession {
     std::uint64_t totalSize{};
 };
 
+struct CachedSendRequest {
+    std::string host;
+    flowdrop::DeviceInfo deviceInfo;
+};
+
 namespace flowdrop {
-    struct Receiver::Impl {
+    struct Server::Impl {
         DeviceInfo _deviceInfo;
         askCallback _askCallback;
         std::filesystem::path _destDir;
@@ -67,7 +72,7 @@ namespace flowdrop {
         std::thread _sdThread;
         std::atomic<bool> *_sdStop = nullptr;
         hv::HttpServer _server;
-        std::unordered_map<std::string, std::string> _accessKeys;
+        //std::unordered_map<std::string, CachedSendRequest> _sendKeys;
 
         void askHandler(const HttpRequestPtr &req, const HttpResponseWriterPtr &writer) {
             if (flowdrop::debug) {
@@ -95,7 +100,11 @@ namespace flowdrop {
 
             bool accepted = _askCallback == nullptr || _askCallback(sendAsk);
 
-            //_accessKeys.insert("test", req->Host());
+            /*std::string sendKey = flowdrop::generate_md5_id();
+            _sendKeys.insert({sendKey, {req->Host(), sendAsk.sender}});
+            std::thread th([this, &sendKey](){
+                std::this_thread::sleep_for(std::chrono::minutes(1));
+            });*/
 
             if (flowdrop::debug) {
                 std::cout << "ask_accepted: " << req->Host() << std::endl;
@@ -103,6 +112,7 @@ namespace flowdrop {
 
             nlohmann::json resp;
             resp["accepted"] = accepted;
+            //resp["key"] = sendKey;
             std::string respString = resp.dump();
 
             writer->Begin();
@@ -250,9 +260,6 @@ namespace flowdrop {
                 }
             };
             _server.run(wait);
-            /*if (listener != nullptr) {
-                listener->onReceiverStarted(port);
-            }*/
         }
 
         void stop() {
@@ -264,45 +271,45 @@ namespace flowdrop {
         }
     };
 
-    Receiver::Receiver(const DeviceInfo &deviceInfo) : pImpl(new Impl) {
+    Server::Server(const DeviceInfo &deviceInfo) : pImpl(new Impl) {
         pImpl->_deviceInfo = deviceInfo;
     }
 
-    Receiver::~Receiver() = default;
+    Server::~Server() = default;
 
-    const DeviceInfo &Receiver::getDeviceInfo() const {
+    const DeviceInfo &Server::getDeviceInfo() const {
         return pImpl->_deviceInfo;
     }
 
-    void Receiver::setDestDir(const std::filesystem::path &destDir) {
+    void Server::setDestDir(const std::filesystem::path &destDir) {
         pImpl->_destDir = destDir;
     }
 
-    const std::filesystem::path &Receiver::getDestDir() const {
+    const std::filesystem::path &Server::getDestDir() const {
         return pImpl->_destDir;
     }
 
-    void Receiver::setAskCallback(const askCallback &askCallback) {
+    void Server::setAskCallback(const askCallback &askCallback) {
         pImpl->_askCallback = askCallback;
     }
 
-    const askCallback &Receiver::getAskCallback() const {
+    const askCallback &Server::getAskCallback() const {
         return pImpl->_askCallback;
     }
 
-    void Receiver::setEventListener(IEventListener *listener) {
+    void Server::setEventListener(IEventListener *listener) {
         pImpl->_listener = listener;
     }
 
-    IEventListener *Receiver::getEventListener() {
+    IEventListener *Server::getEventListener() {
         return pImpl->_listener;
     }
 
-    void Receiver::run(bool wait) {
+    void Server::run(bool wait) {
         pImpl->receive(wait);
     }
 
-    void Receiver::stop() {
+    void Server::stop() {
         pImpl->stop();
     }
 } // namespace flowdrop

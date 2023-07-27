@@ -5,7 +5,7 @@
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
-#include "flowdrop.hpp"
+#include "flowdrop/flowdrop.hpp"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -80,7 +80,7 @@ size_t tfaReadFunction(char *buffer, size_t size, size_t nmemb, void *userdata) 
 
 class SendProgressListener : public IProgressListener {
 public:
-    SendProgressListener(flowdrop::IEventListener *eventListener) : m_eventListener(eventListener) {}
+    explicit SendProgressListener(flowdrop::IEventListener *eventListener) : m_eventListener(eventListener) {}
 
     void totalProgress(std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
@@ -300,7 +300,7 @@ namespace flowdrop {
         return *this;
     }
 
-    DeviceInfo SendRequest::getDeviceInfo() const {
+    [[maybe_unused]] DeviceInfo SendRequest::getDeviceInfo() const {
         return deviceInfo;
     }
 

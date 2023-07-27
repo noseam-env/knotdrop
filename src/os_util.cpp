@@ -90,11 +90,16 @@ bool ServerSocket::bind(unsigned short port) {
 #else
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <unistd.h>
 
 void getFileTime(const char *filePath, std::uint64_t *ctime, std::uint64_t *mtime) {
-    // TODO: implement
+    struct stat fileStat{};
+    if (stat(filePath, &fileStat) == 0) {
+        *ctime = fileStat.st_mtime;
+        *mtime = fileStat.st_mtime;
+    }
 }
 
 class ServerSocket::Impl {

@@ -15,7 +15,11 @@
 
 constexpr unsigned short MIN_PORT = 1024;
 constexpr unsigned short MAX_PORT = 65535;
+#if defined(ANDROID)
+constexpr int MAX_ATTEMPTS = 64; // I do not know why it works like this
+#else
 constexpr int MAX_ATTEMPTS = 16;
+#endif
 
 unsigned short rollAvailablePort(unsigned short defaultPort) {
     auto *serverSocket = new ServerSocket();

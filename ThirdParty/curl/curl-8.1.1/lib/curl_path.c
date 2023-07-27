@@ -121,7 +121,7 @@ CURLcode Curl_get_pathname(const char **cpp, char **path, char *homedir)
   char quot;
   unsigned int i, j;
   size_t fullPathLength, pathLength;
-  bool relativePath = false;
+  bool _relativePath = false;
   static const char WHITESPACE[] = " \t\r\n";
 
   DEBUGASSERT(homedir);
@@ -175,9 +175,9 @@ CURLcode Curl_get_pathname(const char **cpp, char **path, char *homedir)
     /* return pointer to second parameter if it exists */
     *cpp = end + strspn(end, WHITESPACE);
     pathLength = 0;
-    relativePath = (cp[0] == '/' && cp[1] == '~' && cp[2] == '/');
+    _relativePath = (cp[0] == '/' && cp[1] == '~' && cp[2] == '/');
     /* Handling for relative path - prepend home directory */
-    if(relativePath) {
+    if(_relativePath) {
       strcpy(*path, homedir);
       pathLength = strlen(homedir);
       (*path)[pathLength++] = '/';

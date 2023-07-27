@@ -5,10 +5,10 @@
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
+#include "flowdrop/flowdrop.hpp"
 #include <iostream>
 #include <set>
 #include "knot/dnssd.h"
-#include "flowdrop.hpp"
 #include "discovery.hpp"
 #include "specification.hpp"
 #include "hv/axios.h"
