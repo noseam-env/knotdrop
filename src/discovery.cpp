@@ -20,13 +20,13 @@ size_t curl_write_function(void *contents, size_t size, size_t nmemb, std::strin
     return totalSize;
 }
 
-void announce(const std::string &id, int port, std::atomic<bool> &stopFlag) {
+void discovery::announce(const std::string &id, int port, const std::function<bool()> &isStopped) {
     std::unordered_map<std::string, std::string> txt;
     txt["v"] = std::to_string(flowdrop_version);
-    registerService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt, stopFlag);
+    registerService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt, isStopped);
 }
 
-void resolve(const std::string &id, const resolveCallback &callback) {
+void discovery::resolve(const std::string &id, const resolveCallback &callback) {
     resolveService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, [callback](const ResolveReply &resolveReply) {
         std::unordered_map<std::string, std::string> txt = resolveReply.txt;
         if (txt[flowdrop_txt_key_version] != std::to_string(flowdrop_version)) {
@@ -36,7 +36,7 @@ void resolve(const std::string &id, const resolveCallback &callback) {
     });
 }
 
-void flowdrop::find(const flowdrop::findCallback &callback, std::atomic<bool>& stopFlag) {
+void flowdrop::find(const flowdrop::findCallback &callback, const std::function<bool()> &isStopped) {
     std::set<std::string> foundServices;
 
     findService(flowdrop_reg_type, flowdrop_dns_domain, [callback, &foundServices](const FindReply &findReply) {
@@ -51,7 +51,7 @@ void flowdrop::find(const flowdrop::findCallback &callback, std::atomic<bool>& s
                       << findReply.replyDomain << std::endl;
         }
 
-        resolve(findReply.serviceName, [callback](const Address &address) {
+        discovery::resolve(findReply.serviceName, [callback](const discovery::Address &address) {
             if (debug) {
                 std::cout << "resolved: " << address.host << " " << std::to_string(address.port) << std::endl;
             }
@@ -94,10 +94,9 @@ void flowdrop::find(const flowdrop::findCallback &callback, std::atomic<bool>& s
 
             callback(deviceInfo);
         });
-    }, stopFlag);
+    }, isStopped);
 }
 
 void flowdrop::find(const flowdrop::findCallback &callback) {
-    std::atomic<bool> stopFlag(false);
-    flowdrop::find(callback, stopFlag);
+    flowdrop::find(callback, [](){ return false; });
 }

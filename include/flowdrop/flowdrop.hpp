@@ -109,7 +109,7 @@ namespace flowdrop {
 
     using findCallback = std::function<void(const DeviceInfo &)>;
 
-    void find(const findCallback &callback, std::atomic<bool>& stopFlag);
+    void find(const findCallback &callback, const std::function<bool()> &isStopped);
 
     void find(const findCallback &callback);
 

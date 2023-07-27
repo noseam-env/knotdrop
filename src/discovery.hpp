@@ -6,13 +6,17 @@
  */
 #pragma once
 
-void announce(const std::string &id, int port, std::atomic<bool>& stopFlag);
+namespace discovery {
 
-struct Address {
-    std::string host;
-    uint16_t port;
-};
+    void announce(const std::string &id, int port, const std::function<bool()> &isStopped);
 
-using resolveCallback = std::function<void(const Address &)>;
+    struct Address {
+        std::string host;
+        unsigned short port;
+    };
 
-void resolve(const std::string &id, const resolveCallback &callback);
+    using resolveCallback = std::function<void(const Address &)>;
+
+    void resolve(const std::string &id, const resolveCallback &callback);
+
+} // namespace discovery

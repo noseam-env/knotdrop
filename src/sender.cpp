@@ -194,7 +194,7 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
     virtual_tfa_archive_close(archive);
 }
 
-bool askAndSend(const Address &address, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,
+bool askAndSend(const discovery::Address &address, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,
                 flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     std::string baseUrl = "http://" + address.host + ":" + std::to_string(address.port) + "/";
 
@@ -234,11 +234,11 @@ bool send(const std::string &receiverId, std::vector<flowdrop::File *> &files,
         listener->onResolving();
     }
 
-    std::promise<Address> addressPromise;
-    std::future<Address> addressFuture = addressPromise.get_future();
+    std::promise<discovery::Address> addressPromise;
+    std::future<discovery::Address> addressFuture = addressPromise.get_future();
 
     std::thread resolveThread([receiverId, &addressPromise]() {
-        resolve(receiverId, [&addressPromise](const Address &address) {
+        discovery::resolve(receiverId, [&addressPromise](const discovery::Address &address) {
             addressPromise.set_value(address);
         });
     });
@@ -247,7 +247,7 @@ bool send(const std::string &receiverId, std::vector<flowdrop::File *> &files,
 
     bool result;
     if (status == std::future_status::ready) {
-        Address address = addressFuture.get();
+        discovery::Address address = addressFuture.get();
         if (listener != nullptr) {
             listener->onResolved();
         }

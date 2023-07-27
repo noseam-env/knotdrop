@@ -64,7 +64,11 @@ struct CachedSendRequest {
 };
 
 namespace flowdrop {
-    struct Server::Impl {
+    class Server::Impl {
+    public:
+        Impl() = default;
+        ~Impl() = default;
+
         DeviceInfo _deviceInfo;
         askCallback _askCallback;
         std::filesystem::path _destDir;
@@ -244,7 +248,9 @@ namespace flowdrop {
             std::string id = _deviceInfo.id;
             _sdStop = new std::atomic<bool>(false);
             _sdThread = std::thread([&id, &port, this]() {
-                announce(id, port, *_sdStop);
+                discovery::announce(id, port, [this](){
+                    return _sdStop->load();
+                });
             });
             _sdThread.detach();
 
