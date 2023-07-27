@@ -132,8 +132,8 @@ public:
     [[nodiscard]] std::uint64_t getModifiedTime() const override {
         return m_file->getModifiedTime();
     }
-    [[nodiscard]] std::filesystem::file_status getStatus() const override {
-        return m_file->getStatus();
+    [[nodiscard]] std::filesystem::perms getPermissions() const override {
+        return m_file->getPermissions();
     }
     void seek(std::uint64_t pos) override {
         m_file->seek(pos);
