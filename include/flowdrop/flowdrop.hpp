@@ -109,7 +109,7 @@ namespace flowdrop {
 
     using discoverCallback = std::function<void(const DeviceInfo &)>;
 
-    void discover(const discoverCallback &remoteOpt, const std::function<bool()> &isStopped);
+    void discover(const discoverCallback &callback, const std::function<bool()> &isStopped);
 
     void discover(const discoverCallback &callback);
 
