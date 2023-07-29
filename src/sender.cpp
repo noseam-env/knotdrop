@@ -6,16 +6,16 @@
  */
 
 #include "flowdrop/flowdrop.hpp"
-#include <iostream>
+#include "curl/curl.h"
 #include <fstream>
 #include <vector>
 #include <string>
 #include <thread>
 #include <future>
 #include "specification.hpp"
-#include "curl/curl.h"
 #include "virtualtfa.hpp"
 #include "discovery.hpp"
+#include "logger.h"
 
 size_t writeCallback(char *data, size_t size, size_t nmemb, std::string *response) {
     size_t totalSize = size * nmemb;
@@ -53,7 +53,7 @@ bool ask(const std::string &baseUrl, const std::vector<flowdrop::FileInfo> &file
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        std::cerr << "Ask error: " << curl_easy_strerror(res) << std::endl;
+        Logger::log(Logger::LEVEL_ERROR, "Ask error: " + std::string(curl_easy_strerror(res)));
         curl_easy_cleanup(curl);
         return false;
     }
@@ -184,7 +184,7 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
 
         CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            std::cerr << "Send file error: " << curl_easy_strerror(res) << std::endl;
+            Logger::log(Logger::LEVEL_ERROR, "Send file error: " + std::string(curl_easy_strerror(res)));
         }
 
         curl_easy_cleanup(curl);
@@ -194,9 +194,9 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
     virtual_tfa_archive_close(archive);
 }
 
-bool askAndSend(const discovery::Address &address, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,
+bool askAndSend(const discovery::Remote &remote, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,
                 flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
-    std::string baseUrl = "http://" + address.host + ":" + std::to_string(address.port) + "/";
+    std::string baseUrl = "http://" + remote.ip + ":" + std::to_string(remote.port) + "/";
 
     if (listener != nullptr) {
         listener->onAskingReceiver();
@@ -234,27 +234,32 @@ bool send(const std::string &receiverId, std::vector<flowdrop::File *> &files,
         listener->onResolving();
     }
 
-    std::promise<discovery::Address> addressPromise;
-    std::future<discovery::Address> addressFuture = addressPromise.get_future();
+    std::promise<std::optional<discovery::Remote>> resolvePromise;
+    std::future<std::optional<discovery::Remote>> resolveFuture = resolvePromise.get_future();
 
-    std::thread resolveThread([receiverId, &addressPromise]() {
-        discovery::resolve(receiverId, [&addressPromise](const discovery::Address &address) {
-            addressPromise.set_value(address);
+    std::thread resolveThread([receiverId, &resolvePromise]() {
+        discovery::resolveAndQuery(receiverId, [&resolvePromise](const std::optional<discovery::Remote> &remoteOpt) {
+            resolvePromise.set_value(remoteOpt);
         });
     });
 
-    std::future_status status = addressFuture.wait_for(resolveTimeout);
+    std::future_status status = resolveFuture.wait_for(resolveTimeout);
 
     bool result;
     if (status == std::future_status::ready) {
-        discovery::Address address = addressFuture.get();
+        std::optional<discovery::Remote> remoteOpt = resolveFuture.get();
+        if (!remoteOpt.has_value()) {
+            if (listener != nullptr) {
+                listener->onReceiverNotFound();
+            }
+            return false;
+        }
         if (listener != nullptr) {
             listener->onResolved();
         }
-        if (flowdrop::debug) {
-            std::cout << "resolved: " << address.host << ":" << std::to_string(address.port) << std::endl;
-        }
-        result = askAndSend(address, files, askTimeout, listener, deviceInfo);
+        discovery::Remote remote = remoteOpt.value();
+        Logger::log(Logger::LEVEL_DEBUG, "fully resolved: " + remote.ip + ":" + std::to_string(remote.port));
+        result = askAndSend(remote, files, askTimeout, listener, deviceInfo);
     } else {
         if (listener != nullptr) {
             listener->onReceiverNotFound();

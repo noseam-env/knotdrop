@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iostream>
 #include "os_util.h"
+#include "logger.h"
 
 #if defined(__clang__)
 #include "sys/stat.h"
@@ -33,7 +34,9 @@ void setJsonOptionalString(json &j, const std::string &key, const std::optional<
 
 namespace flowdrop {
 
-    bool debug = false;
+    void setDebug(bool enabled) {
+        Logger::set_debug(enabled);
+    }
 
     std::string generate_md5_id() {
         auto now = std::chrono::system_clock::now();

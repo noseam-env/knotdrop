@@ -10,13 +10,19 @@ namespace discovery {
 
     void announce(const std::string &id, int port, const std::function<bool()> &isStopped);
 
-    struct Address {
-        std::string host;
+    enum IPType {
+        IPv6,
+        IPv4
+    };
+
+    struct Remote {
+        IPType ipType;
+        std::string ip;
         unsigned short port;
     };
 
-    using resolveCallback = std::function<void(const Address &)>;
+    using resolveCallback = std::function<void(const std::optional<Remote> &)>;
 
-    void resolve(const std::string &id, const resolveCallback &callback);
+    void resolveAndQuery(const std::string &id, const resolveCallback &callback);
 
 } // namespace discovery

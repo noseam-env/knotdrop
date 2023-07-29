@@ -6,6 +6,7 @@
  */
 
 #include "os_util.h"
+#include "logger.h"
 
 #ifndef MLAS_NO_EXCEPTION
 #include <stdexcept>
@@ -14,7 +15,6 @@
 #if defined(WIN32)
 
 #include <Windows.h>
-#include <iostream>
 
 std::uint64_t fileTimeToUnixTime(const FILETIME& fileTime) {
     ULARGE_INTEGER largeInt;
@@ -31,7 +31,7 @@ std::uint64_t fileTimeToUnixTime(const FILETIME& fileTime) {
 void getFileTime(const char *filePath, std::uint64_t *ctime, std::uint64_t *mtime) {
     HANDLE fileHandle = CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (fileHandle == INVALID_HANDLE_VALUE) {
-        std::cerr << "getFileTime: Error opening file" << std::endl;
+        Logger::log(Logger::LEVEL_ERROR, "getFileTime: Error opening file");
         return;
     }
 
@@ -41,7 +41,7 @@ void getFileTime(const char *filePath, std::uint64_t *ctime, std::uint64_t *mtim
         *ctime = fileTimeToUnixTime(creationTime);
         *mtime = fileTimeToUnixTime(lastWriteTime);
     } else {
-        std::cerr << "getFileTime: Error getting file time" << std::endl;
+        Logger::log(Logger::LEVEL_ERROR, "getFileTime: Error getting file time");
         CloseHandle(fileHandle);
         return;
     }
@@ -53,7 +53,7 @@ public:
         WSADATA wsaData;
         int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (result != 0) {
-            throw std::runtime_error("Unable to init ServerSocket");
+            throw std::runtime_error("Unable to init WinSock2");
         }
 
         sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);

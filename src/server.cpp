@@ -9,13 +9,14 @@
 #include "hv/HttpServer.h"
 #include "hv/hlog.h"
 #include <thread>
+#include <set>
+#include <utility>
+#include <atomic>
 #include "portroller.hpp"
 #include "discovery.hpp"
 #include "specification.hpp"
 #include "virtualtfa.hpp"
-#include <set>
-#include <utility>
-#include <atomic>
+#include "logger.h"
 
 class ReceiveProgressListener : public IProgressListener {
 public:
@@ -79,17 +80,13 @@ namespace flowdrop {
         //std::unordered_map<std::string, CachedSendRequest> _sendKeys;
 
         void askHandler(const HttpRequestPtr &req, const HttpResponseWriterPtr &writer) {
-            if (flowdrop::debug) {
-                std::cout << "ask_new: " << req->Host() << std::endl;
-            }
+            Logger::log(Logger::LEVEL_DEBUG, "ask_new" + req->Host());
 
             json j;
             try {
                 j = json::parse(req->Body());
             } catch (const std::exception &) {
-                if (flowdrop::debug) {
-                    std::cout << "ask_invalid_json: " << req->Host() << std::endl;
-                }
+                Logger::log(Logger::LEVEL_DEBUG, "ask_invalid_json: " + req->Host());
                 writer->Begin();
                 writer->WriteStatus(HTTP_STATUS_BAD_REQUEST);
                 writer->WriteBody("Invalid JSON");
@@ -110,9 +107,7 @@ namespace flowdrop {
                 std::this_thread::sleep_for(std::chrono::minutes(1));
             });*/
 
-            if (flowdrop::debug) {
-                std::cout << "ask_accepted: " << req->Host() << std::endl;
-            }
+            Logger::log(Logger::LEVEL_DEBUG, "ask_accepted: " + req->Host());
 
             nlohmann::json resp;
             resp["accepted"] = accepted;
@@ -218,11 +213,9 @@ namespace flowdrop {
             return status_code;
         }
 
-        void receive(bool wait) {
+        void run() {
             unsigned short port = rollAvailablePort(flowdrop_default_port);
-            if (flowdrop::debug) {
-                std::cout << "port: " << port << std::endl;
-            }
+            Logger::log(Logger::LEVEL_DEBUG, "server port: " + std::to_string(port));
 
             std::string slash = "/";
             std::string deviceInfoStr = json(_deviceInfo).dump();
@@ -265,7 +258,7 @@ namespace flowdrop {
                     _listener->onReceiverStarted(port);
                 }
             };
-            _server.run(wait);
+            _server.run(true);
         }
 
         void stop() {
@@ -311,8 +304,8 @@ namespace flowdrop {
         return pImpl->_listener;
     }
 
-    void Server::run(bool wait) {
-        pImpl->receive(wait);
+    void Server::run() {
+        pImpl->run();
     }
 
     void Server::stop() {

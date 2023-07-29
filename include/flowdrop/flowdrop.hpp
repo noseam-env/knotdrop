@@ -17,7 +17,7 @@
 using json = nlohmann::json;
 
 namespace flowdrop {
-    extern bool debug;
+    void setDebug(bool enabled);
 
     std::string generate_md5_id();
 
@@ -99,7 +99,7 @@ namespace flowdrop {
         void setEventListener(IEventListener *);
         IEventListener *getEventListener();
 
-        void run(bool wait = true);
+        void run();
         void stop();
 
     private:
@@ -107,11 +107,11 @@ namespace flowdrop {
         std::unique_ptr<Impl> pImpl;
     };
 
-    using findCallback = std::function<void(const DeviceInfo &)>;
+    using discoverCallback = std::function<void(const DeviceInfo &)>;
 
-    void find(const findCallback &callback, const std::function<bool()> &isStopped);
+    void discover(const discoverCallback &remoteOpt, const std::function<bool()> &isStopped);
 
-    void find(const findCallback &callback);
+    void discover(const discoverCallback &callback);
 
     class File {
     public:

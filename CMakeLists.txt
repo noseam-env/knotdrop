@@ -16,14 +16,18 @@ option(ENABLE_KNOT_DNSSD "ENABLE KNOT DNS-SD" ON)
 set(CMAKE_CXX_STANDARD 17)
 
 set(LIBFLOWDROP_SOURCES
+        src/core.cpp
         src/discovery.cpp
         src/discovery.hpp
+        src/logger.cpp
+        src/logger.h
+        src/os_util.cpp
+        src/os_util.h
         src/portroller.cpp
         src/portroller.hpp
-        src/receiver.cpp
         src/sender.cpp
-        src/specification.hpp
-        src/core.cpp src/os_util.cpp src/os_util.h)
+        src/server.cpp
+        src/specification.hpp)
 
 set(LIBFLOWDROP_PUBLIC_LIBS
         nlohmann_json::nlohmann_json)
@@ -32,6 +36,10 @@ set(LIBFLOWDROP_PRIVATE_LIBS
         libcurl
         hv_static
         virtualtfa_static)
+
+if(ANDROID)
+    list(APPEND LIBFLOWDROP_PRIVATE_LIBS log)
+endif ()
 
 set(LIBFLOWDROP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
