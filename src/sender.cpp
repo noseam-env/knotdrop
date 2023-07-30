@@ -55,9 +55,11 @@ bool ask(const std::string &baseUrl, const std::vector<flowdrop::FileInfo> &file
     if (res != CURLE_OK) {
         Logger::log(Logger::LEVEL_ERROR, "Ask error: " + std::string(curl_easy_strerror(res)));
         curl_easy_cleanup(curl);
+        curl_global_cleanup();
         return false;
     }
     curl_easy_cleanup(curl);
+    curl_global_cleanup();
 
     json responseJson;
     try {
@@ -74,7 +76,9 @@ size_t ignoreDataCallback(char * /*buffer*/, size_t size, size_t nmemb, void * /
 }
 
 size_t tfaReadFunction(char *buffer, size_t size, size_t nmemb, void *userdata) {
+    Logger::log(Logger::LEVEL_INFO, "2");
     auto *tfa = static_cast<VirtualTfaWriter *>(userdata);
+    Logger::log(Logger::LEVEL_INFO, "3");
     return tfa->writeTo(buffer, size * nmemb);
 }
 
@@ -182,6 +186,7 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
 
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ignoreDataCallback);
 
+        Logger::log(Logger::LEVEL_INFO, "1");
         CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             Logger::log(Logger::LEVEL_ERROR, "Send file error: " + std::string(curl_easy_strerror(res)));
@@ -196,7 +201,11 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
 
 bool askAndSend(const discovery::Remote &remote, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,
                 flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
-    std::string baseUrl = "http://" + remote.ip + ":" + std::to_string(remote.port) + "/";
+    std::string host = remote.ip;
+    if (remote.ipType == discovery::IPv6) {
+        host = "[" + host + "]";
+    }
+    std::string baseUrl = "http://" + host + ":" + std::to_string(remote.port) + "/";
 
     if (listener != nullptr) {
         listener->onAskingReceiver();

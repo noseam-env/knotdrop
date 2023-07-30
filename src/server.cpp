@@ -80,13 +80,14 @@ namespace flowdrop {
         //std::unordered_map<std::string, CachedSendRequest> _sendKeys;
 
         void askHandler(const HttpRequestPtr &req, const HttpResponseWriterPtr &writer) {
-            Logger::log(Logger::LEVEL_DEBUG, "ask_new" + req->Host());
+            std::string senderIp = req->client_addr.ip;
+            Logger::log(Logger::LEVEL_DEBUG, "ask_new: " + senderIp);
 
             json j;
             try {
                 j = json::parse(req->Body());
             } catch (const std::exception &) {
-                Logger::log(Logger::LEVEL_DEBUG, "ask_invalid_json: " + req->Host());
+                Logger::log(Logger::LEVEL_DEBUG, "ask_invalid_json: " + senderIp);
                 writer->Begin();
                 writer->WriteStatus(HTTP_STATUS_BAD_REQUEST);
                 writer->WriteBody("Invalid JSON");
@@ -102,12 +103,12 @@ namespace flowdrop {
             bool accepted = _askCallback == nullptr || _askCallback(sendAsk);
 
             /*std::string sendKey = flowdrop::generate_md5_id();
-            _sendKeys.insert({sendKey, {req->Host(), sendAsk.sender}});
+            _sendKeys.insert({sendKey, {senderIp, sendAsk.sender}});
             std::thread th([this, &sendKey](){
                 std::this_thread::sleep_for(std::chrono::minutes(1));
             });*/
 
-            Logger::log(Logger::LEVEL_DEBUG, "ask_accepted: " + req->Host());
+            Logger::log(Logger::LEVEL_DEBUG, "ask_accepted: " + senderIp);
 
             nlohmann::json resp;
             resp["accepted"] = accepted;
@@ -122,6 +123,7 @@ namespace flowdrop {
         }
 
         int sendHandler(const HttpContextPtr &ctx, http_parser_state state, const char *data, size_t size) {
+            //std::string senderIp = ctx->ip();
             int status_code = HTTP_STATUS_UNFINISHED;
             auto *session = (ReceiveSession *) ctx->userdata;
             switch (state) {
@@ -248,6 +250,7 @@ namespace flowdrop {
             _sdThread.detach();
 
             _server = hv::HttpServer(&router);
+            _server.setHost("::");
             _server.setPort(port);
             _server.setThreadNum(3);
             bool started = false;

@@ -8,4 +8,4 @@ option(BUILD_SHARED_LIBS "" OFF)
 option(CURL_STATIC_CRT "" OFF) # /MT
 option(CURL_ENABLE_SSL "" OFF)
 
-add_subdirectory(curl-8.1.1)
+add_subdirectory(curl-8.2.1)

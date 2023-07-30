@@ -52,8 +52,7 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
         }
         const char *hostName = reply.hostName.value().c_str();
         //bool fullyResolved = false;
-        // ipv6 not working for unknown reasons
-        queryIPv4Address(hostName, [callback, port](const std::optional<IPAddress> &ipOpt){
+        queryIPv6Address(hostName, [callback, port](const std::optional<IPAddress> &ipOpt){
             if (!ipOpt.has_value()) {
                 callback(std::nullopt);
                 return;
@@ -93,8 +92,9 @@ void flowdrop::discover(const flowdrop::discoverCallback &callback, const std::f
             if (remote.ipType == discovery::IPv6) {
                 host = "[" + host + "]";
             }
+            std::string baseUrl = "http://" + host + ":" + std::to_string(remote.port) + "/";
 
-            std::string url = "http://" + host + ":" + std::to_string(remote.port) + "/device_info";
+            std::string url = baseUrl + "/device_info";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 

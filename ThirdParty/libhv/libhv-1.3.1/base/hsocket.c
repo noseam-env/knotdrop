@@ -181,6 +181,14 @@ static int sockaddr_bind(sockaddr_u* localaddr, int type) {
         goto error;
     }
 
+    // MODIFIED START
+    int optval = 0;
+    if (setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&optval, sizeof(optval)) < 0) {
+        perror("setsockopt");
+        goto error;
+    }
+    // MODIFIED END
+
 #ifdef OS_UNIX
     so_reuseaddr(sockfd, 1);
     // so_reuseport(sockfd, 1);
