@@ -52,7 +52,12 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
         }
         const char *hostName = reply.hostName.value().c_str();
         //bool fullyResolved = false;
-        queryIPv6Address(hostName, [callback, port](const std::optional<IPAddress> &ipOpt){
+#if defined(ANDROID) // Android does not support IPv6
+        queryIPv4Address
+#else
+        queryIPv6Address
+#endif
+        (hostName, [callback, port](const std::optional<IPAddress> &ipOpt){
             if (!ipOpt.has_value()) {
                 callback(std::nullopt);
                 return;
