@@ -99,7 +99,7 @@ void flowdrop::discover(const flowdrop::discoverCallback &callback, const std::f
             }
             std::string baseUrl = "http://" + host + ":" + std::to_string(remote.port) + "/";
 
-            std::string url = baseUrl + "/device_info";
+            std::string url = baseUrl + "device_info";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 
