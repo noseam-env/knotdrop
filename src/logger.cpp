@@ -23,7 +23,7 @@ void Logger::log(Logger::LogLevel level, const std::string &message) {
         level = LEVEL_INFO;
     }
 #if defined(ANDROID)
-    __android_log_print(level == ERROR ? ANDROID_LOG_ERROR : ANDROID_LOG_INFO, LOG_TAG, "%s", message.c_str());
+    __android_log_print(level == LEVEL_ERROR ? ANDROID_LOG_ERROR : ANDROID_LOG_INFO, LOG_TAG, "%s", message.c_str());
 #else
     if (level == LEVEL_INFO) {
         std::cout << message << std::endl;
