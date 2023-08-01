@@ -76,9 +76,7 @@ size_t ignoreDataCallback(char * /*buffer*/, size_t size, size_t nmemb, void * /
 }
 
 size_t tfaReadFunction(char *buffer, size_t size, size_t nmemb, void *userdata) {
-    Logger::log(Logger::LEVEL_INFO, "2");
     auto *tfa = static_cast<VirtualTfaWriter *>(userdata);
-    Logger::log(Logger::LEVEL_INFO, "3");
     return tfa->writeTo(buffer, size * nmemb);
 }
 
@@ -186,7 +184,6 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
 
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ignoreDataCallback);
 
-        Logger::log(Logger::LEVEL_INFO, "1");
         CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             Logger::log(Logger::LEVEL_ERROR, "Send file error: " + std::string(curl_easy_strerror(res)));
