@@ -8,7 +8,6 @@
 
 #include <cstdint>
 #include <memory>
-#include "os/file_info.h"
 
 class ServerSocket {
 public:

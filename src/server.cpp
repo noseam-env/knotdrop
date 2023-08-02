@@ -14,7 +14,7 @@
 #include <atomic>
 #include "portroller.hpp"
 #include "discovery.hpp"
-#include "specification.hpp"
+#include "specification.h"
 #include "virtualtfa.hpp"
 #include "logger.h"
 

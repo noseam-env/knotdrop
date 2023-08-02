@@ -6,12 +6,9 @@
  */
 
 #include "portroller.hpp"
-#include "os_util.h"
+#include "os/experimental_socket.h"
 #include <random>
-
-#ifndef MLAS_NO_EXCEPTION
 #include <stdexcept>
-#endif
 
 constexpr unsigned short MIN_PORT = 1024;
 constexpr unsigned short MAX_PORT = 65535;

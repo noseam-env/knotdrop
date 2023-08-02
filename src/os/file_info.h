@@ -1,14 +1,15 @@
-//
-// Created by nelon on 8/2/2023.
-//
+/*
+ * This file is part of libflowdrop.
+ *
+ * For license and copyright information please follow this link:
+ * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
+ */
+#pragma once
 
-#ifndef FLOWDROP_CLI_FILE_INFO_H
-#define FLOWDROP_CLI_FILE_INFO_H
+#include <cstdint>
+#include <string>
+#include <stdexcept>
 
-
-class file_info {
-
-};
-
-
-#endif //FLOWDROP_CLI_FILE_INFO_H
+namespace FileInfo {
+    void Time(const std::string &filePath, std::uint64_t *ctime, std::uint64_t *mtime);
+}

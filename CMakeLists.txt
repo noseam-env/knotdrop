@@ -16,18 +16,20 @@ option(ENABLE_KNOT_DNSSD "ENABLE KNOT DNS-SD" ON)
 set(CMAKE_CXX_STANDARD 17)
 
 set(LIBFLOWDROP_SOURCES
+        src/os/file_info.cpp
+        src/os/file_info.h
+        src/os/experimental_socket.cpp
+        src/os/experimental_socket.cpp
         src/core.cpp
         src/discovery.cpp
         src/discovery.hpp
         src/logger.cpp
         src/logger.h
-        src/os_util.cpp
-        src/os_util.h
         src/portroller.cpp
         src/portroller.hpp
-        src/sender.cpp
+        src/send_request.cpp
         src/server.cpp
-        src/specification.hpp)
+        src/specification.h)
 
 set(LIBFLOWDROP_PUBLIC_LIBS
         nlohmann_json::nlohmann_json)

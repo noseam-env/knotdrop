@@ -9,7 +9,7 @@
 #include <utility>
 #include <sstream>
 #include <iostream>
-#include "os_util.h"
+#include "os/file_info.h"
 #include "logger.h"
 
 #if defined(__clang__)
@@ -113,7 +113,7 @@ namespace flowdrop {
             if (!_fileStream.is_open()) {
                 throw std::runtime_error("Error opening file: " + _filePath.string());
             }
-            getFileTime(_filePath.string().c_str(), &_createdTime, &_modifiedTime);
+            ::FileInfo::Time(_filePath.string(), &_createdTime, &_modifiedTime);
             if (_createdTime == 0) {
                 _createdTime = std::time(nullptr);
             }

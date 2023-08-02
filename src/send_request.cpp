@@ -12,7 +12,7 @@
 #include <string>
 #include <thread>
 #include <future>
-#include "specification.hpp"
+#include "specification.h"
 #include "virtualtfa.hpp"
 #include "discovery.hpp"
 #include "logger.h"
@@ -251,30 +251,34 @@ bool send(const std::string &receiverId, std::vector<flowdrop::File *> &files,
 
     std::future_status status = resolveFuture.wait_for(resolveTimeout);
 
-    bool result;
-    if (status == std::future_status::ready) {
+    if (status != std::future_status::ready) {
+        if (listener != nullptr) {
+            listener->onReceiverNotFound();
+        }
+        resolveThread.join();
+        return false;
+    }
+
+    try {
         std::optional<discovery::Remote> remoteOpt = resolveFuture.get();
         if (!remoteOpt.has_value()) {
             if (listener != nullptr) {
                 listener->onReceiverNotFound();
             }
+            resolveThread.join();
             return false;
         }
         if (listener != nullptr) {
             listener->onResolved();
         }
         discovery::Remote remote = remoteOpt.value();
+        resolveThread.join();
         Logger::log(Logger::LEVEL_DEBUG, "fully resolved: " + remote.ip + ":" + std::to_string(remote.port));
-        result = askAndSend(remote, files, askTimeout, listener, deviceInfo);
-    } else {
-        if (listener != nullptr) {
-            listener->onReceiverNotFound();
-        }
+        return askAndSend(remote, files, askTimeout, listener, deviceInfo);
+    } catch (std::exception &e) {
+        resolveThread.join();
         return false;
     }
-
-    resolveThread.join();
-    return result;
 }
 
 namespace flowdrop {
