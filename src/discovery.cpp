@@ -20,10 +20,10 @@ size_t curl_write_function(void *contents, size_t size, size_t nmemb, std::strin
     return totalSize;
 }
 
-void discovery::announce(const std::string &id, int port, const std::function<bool()> &isStopped) {
+void discovery::announce(const std::string &id, unsigned short port, const std::function<bool()> &isStopped) {
     std::unordered_map<std::string, std::string> txt;
     txt["v"] = std::to_string(flowdrop_version);
-    registerService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, static_cast<unsigned short>(port), txt, isStopped);
+    registerService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt, isStopped);
 }
 
 discovery::IPType convert(IPType ipType) {
