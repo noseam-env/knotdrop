@@ -8,12 +8,12 @@
 #ifndef LIBFLOWDROP_FLOWDROP_HPP
 #define LIBFLOWDROP_FLOWDROP_HPP
 
-#include <string>
-#include <functional>
-#include <optional>
-#include <fstream>
-#include <chrono>
-#include <filesystem>
+#include <string> // string
+#include <functional> // function
+#include <optional> // optional
+#include <chrono> // milliseconds
+#include <filesystem> // path, perms
+#include <vector> // vector
 
 namespace flowdrop {
     void setDebug(bool enabled);

@@ -12,6 +12,7 @@
 #include <iostream>
 #include "os/file_info.h"
 #include "logger.h"
+#include "fstream"
 
 #if defined(__clang__)
 #include "sys/stat.h"
