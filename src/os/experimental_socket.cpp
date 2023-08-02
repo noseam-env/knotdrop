@@ -6,7 +6,6 @@
  */
 
 #include "os_util.h"
-#include "logger.h"
 
 #ifndef MLAS_NO_EXCEPTION
 #include <stdexcept>
@@ -15,37 +14,6 @@
 #if defined(WIN32)
 
 #include <Windows.h>
-
-std::uint64_t fileTimeToUnixTime(const FILETIME& fileTime) {
-    ULARGE_INTEGER largeInt;
-    largeInt.LowPart = fileTime.dwLowDateTime;
-    largeInt.HighPart = fileTime.dwHighDateTime;
-
-    const std::uint64_t epochOffset = 116444736000000000ULL;
-    std::uint64_t fileTimeValue = largeInt.QuadPart - epochOffset;
-
-    const std::uint64_t ticksPerSecond = 10000000ULL;
-    return fileTimeValue / ticksPerSecond;
-}
-
-void getFileTime(const char *filePath, std::uint64_t *ctime, std::uint64_t *mtime) {
-    HANDLE fileHandle = CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (fileHandle == INVALID_HANDLE_VALUE) {
-        Logger::log(Logger::LEVEL_ERROR, "getFileTime: Error opening file");
-        return;
-    }
-
-    FILETIME creationTime, lastAccessTime, lastWriteTime;
-    if (GetFileTime(fileHandle, &creationTime, &lastAccessTime, &lastWriteTime)) {
-        CloseHandle(fileHandle);
-        *ctime = fileTimeToUnixTime(creationTime);
-        *mtime = fileTimeToUnixTime(lastWriteTime);
-    } else {
-        Logger::log(Logger::LEVEL_ERROR, "getFileTime: Error getting file time");
-        CloseHandle(fileHandle);
-        return;
-    }
-}
 
 class ServerSocket::Impl {
 public:
@@ -90,17 +58,8 @@ bool ServerSocket::bind(unsigned short port) {
 #else
 
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <netinet/in.h>
 #include <unistd.h>
-
-void getFileTime(const char *filePath, std::uint64_t *ctime, std::uint64_t *mtime) {
-    struct stat fileStat{};
-    if (stat(filePath, &fileStat) == 0) {
-        *ctime = fileStat.st_mtime;
-        *mtime = fileStat.st_mtime;
-    }
-}
 
 class ServerSocket::Impl {
 public:

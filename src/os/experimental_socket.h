@@ -8,8 +8,7 @@
 
 #include <cstdint>
 #include <memory>
-
-void getFileTime(const char *filePath, std::uint64_t *ctime, std::uint64_t *mtime);
+#include "os/file_info.h"
 
 class ServerSocket {
 public:
