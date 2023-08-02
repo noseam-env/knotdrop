@@ -21,6 +21,7 @@ set(LIBFLOWDROP_SOURCES
         src/os/experimental_socket.cpp
         src/os/experimental_socket.cpp
         src/core.cpp
+        src/core.h
         src/discovery.cpp
         src/discovery.hpp
         src/logger.cpp
@@ -31,13 +32,11 @@ set(LIBFLOWDROP_SOURCES
         src/server.cpp
         src/specification.h)
 
-set(LIBFLOWDROP_PUBLIC_LIBS
-        nlohmann_json::nlohmann_json)
-
 set(LIBFLOWDROP_PRIVATE_LIBS
-        libcurl
+        nlohmann_json::nlohmann_json
+        virtualtfa_static
         hv_static
-        virtualtfa_static)
+        libcurl)
 
 if(ANDROID)
     list(APPEND LIBFLOWDROP_PRIVATE_LIBS log)
@@ -92,13 +91,11 @@ if (LIBFLOWDROP_BUILD_SHARED)
     add_library(libflowdrop_shared SHARED ${LIBFLOWDROP_SOURCES})
     target_include_directories(libflowdrop_shared PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_shared PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
-    target_link_libraries(libflowdrop_shared PUBLIC ${LIBFLOWDROP_PUBLIC_LIBS})
     target_link_libraries(libflowdrop_shared PRIVATE ${LIBFLOWDROP_PRIVATE_LIBS})
 endif ()
 if (LIBFLOWDROP_BUILD_STATIC)
     add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
     target_include_directories(libflowdrop_static PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_static PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
-    target_link_libraries(libflowdrop_static PUBLIC ${LIBFLOWDROP_PUBLIC_LIBS})
     target_link_libraries(libflowdrop_static PRIVATE ${LIBFLOWDROP_PRIVATE_LIBS})
 endif ()

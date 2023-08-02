@@ -6,6 +6,7 @@
  */
 
 #include "flowdrop/flowdrop.hpp"
+#include "core.h"
 #include <utility>
 #include <sstream>
 #include <iostream>
@@ -70,7 +71,6 @@ namespace flowdrop {
 
     void to_json(json &j, const DeviceInfo &d) {
         j["id"] = d.id;
-        setJsonOptionalString(j, "uuid", d.uuid);
         setJsonOptionalString(j, "name", d.name);
         setJsonOptionalString(j, "model", d.model);
         setJsonOptionalString(j, "platform", d.platform);
@@ -79,7 +79,6 @@ namespace flowdrop {
 
     void from_json(const json &j, DeviceInfo &d) {
         j.at("id").get_to(d.id);
-        getJsonOptionalString(j, "uuid", d.uuid);
         getJsonOptionalString(j, "name", d.name);
         getJsonOptionalString(j, "model", d.model);
         getJsonOptionalString(j, "platform", d.platform);

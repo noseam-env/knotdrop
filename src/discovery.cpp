@@ -6,12 +6,13 @@
  */
 
 #include "flowdrop/flowdrop.hpp"
-#include <set>
+#include "core.h"
 #include "knot/dnssd.h"
 #include "discovery.hpp"
 #include "specification.h"
 #include "curl/curl.h"
 #include "logger.h"
+#include <set>
 
 size_t curl_write_function(void *contents, size_t size, size_t nmemb, std::string *output) {
     size_t totalSize = size * nmemb;

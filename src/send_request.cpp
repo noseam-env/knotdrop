@@ -6,8 +6,8 @@
  */
 
 #include "flowdrop/flowdrop.hpp"
+#include "core.h"
 #include "curl/curl.h"
-#include <fstream>
 #include <vector>
 #include <string>
 #include <thread>
@@ -90,21 +90,21 @@ public:
         }
     }
 
-    void fileStart(char *fileName, std::uint64_t fileSize) override {
+    void fileStart(const FileInfo &fileInfo) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileStart({fileName, fileSize});
+            m_eventListener->onSendingFileStart({fileInfo.name, fileInfo.size});
         }
     }
 
-    void fileProgress(char *fileName, std::uint64_t fileSize, std::uint64_t currentSize) override {
+    void fileProgress(const FileInfo &fileInfo, std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileProgress({fileName, fileSize}, currentSize);
+            m_eventListener->onSendingFileProgress({fileInfo.name, fileInfo.size}, currentSize);
         }
     }
 
-    void fileEnd(char *fileName, std::uint64_t fileSize) override {
+    void fileEnd(const FileInfo &fileInfo) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileEnd({fileName, fileSize});
+            m_eventListener->onSendingFileEnd({fileInfo.name, fileInfo.size});
         }
     }
 
@@ -276,70 +276,131 @@ bool send(const std::string &receiverId, std::vector<flowdrop::File *> &files,
         Logger::log(Logger::LEVEL_DEBUG, "fully resolved: " + remote.ip + ":" + std::to_string(remote.port));
         return askAndSend(remote, files, askTimeout, listener, deviceInfo);
     } catch (std::exception &e) {
+        Logger::log(Logger::LEVEL_ERROR, "resolve error: " + std::string(e.what()));
         resolveThread.join();
         return false;
     }
 }
 
 namespace flowdrop {
-    SendRequest::SendRequest() = default;
+    class SendRequest::Impl {
+    public:
+        Impl() = default;
+        ~Impl() = default;
+
+        [[nodiscard]] DeviceInfo getDeviceInfo() const {
+            return _deviceInfo;
+        }
+        void setDeviceInfo(const DeviceInfo &info) {
+            _deviceInfo = info;
+        }
+
+        [[nodiscard]] std::string getReceiverId() const {
+            return _receiverId;
+        }
+        void setReceiverId(const std::string &id) {
+            _receiverId = id;
+        }
+
+        [[nodiscard]] std::vector<File *> getFiles() const {
+            return _files;
+        }
+        void setFiles(const std::vector<File *>& files) {
+            _files = files;
+        }
+
+        [[nodiscard]] std::chrono::milliseconds getResolveTimeout() const {
+            return _resolveTimeout;
+        }
+        void setResolveTimeout(const std::chrono::milliseconds &timeout) {
+            _resolveTimeout = timeout;
+        }
+
+        [[nodiscard]] std::chrono::milliseconds getAskTimeout() const {
+            return _askTimeout;
+        }
+        void setAskTimeout(const std::chrono::milliseconds &timeout) {
+            _askTimeout = timeout;
+        }
+
+        [[nodiscard]] IEventListener* getEventListener() const {
+            return _eventListener;
+        }
+        void setEventListener(IEventListener *listener) {
+            _eventListener = listener;
+        }
+
+        bool execute() {
+            return send(_receiverId, _files, _resolveTimeout, _askTimeout, _eventListener, _deviceInfo);
+        }
+
+    private:
+        DeviceInfo _deviceInfo;
+        std::string _receiverId;
+        std::vector<File *> _files;
+        std::chrono::milliseconds _resolveTimeout = std::chrono::milliseconds(10 * 1000); // 10 secs
+        std::chrono::milliseconds _askTimeout = std::chrono::milliseconds(60 * 1000); // 60 secs
+        IEventListener *_eventListener = nullptr;
+    };
+
+    SendRequest::SendRequest() : pImpl(new Impl) {}
     SendRequest::~SendRequest() = default;
 
-    SendRequest& SendRequest::setDeviceInfo(const DeviceInfo& info) {
-        deviceInfo = info;
+    [[maybe_unused]] SendRequest& SendRequest::setDeviceInfo(const DeviceInfo& info) {
+        pImpl->setDeviceInfo(info);
         return *this;
     }
 
-    SendRequest& SendRequest::setReceiverId(const std::string& id) {
-        receiverId = id;
+    [[maybe_unused]] SendRequest& SendRequest::setReceiverId(const std::string& id) {
+        pImpl->setReceiverId(id);
         return *this;
     }
 
-    SendRequest& SendRequest::setFiles(const std::vector<File *>& files) {
-        this->files = files;
+    [[maybe_unused]] SendRequest& SendRequest::setFiles(const std::vector<File *>& files) {
+        pImpl->setFiles(files);
         return *this;
     }
 
-    SendRequest& SendRequest::setResolveTimeout(const std::chrono::milliseconds& timeout) {
-        resolveTimeout = timeout;
+    [[maybe_unused]] SendRequest& SendRequest::setResolveTimeout(const std::chrono::milliseconds& timeout) {
+        pImpl->setResolveTimeout(timeout);
         return *this;
     }
 
-    SendRequest& SendRequest::setAskTimeout(const std::chrono::milliseconds& timeout) {
-        askTimeout = timeout;
+    [[maybe_unused]] SendRequest& SendRequest::setAskTimeout(const std::chrono::milliseconds& timeout) {
+        pImpl->setAskTimeout(timeout);
         return *this;
     }
 
-    SendRequest& SendRequest::setEventListener(IEventListener* listener) {
-        eventListener = listener;
+    [[maybe_unused]] SendRequest& SendRequest::setEventListener(IEventListener* listener) {
+        pImpl->setEventListener(listener);
         return *this;
     }
 
     [[maybe_unused]] DeviceInfo SendRequest::getDeviceInfo() const {
-        return deviceInfo;
+        return pImpl->getDeviceInfo();
     }
 
-    std::string SendRequest::getReceiverId() const {
-        return receiverId;
+    [[maybe_unused]] std::string SendRequest::getReceiverId() const {
+        return pImpl->getReceiverId();
     }
 
-    std::vector<File *> SendRequest::getFiles() const {
-        return files;
+    [[maybe_unused]] std::vector<File *> SendRequest::getFiles() const {
+        return pImpl->getFiles();
     }
 
-    std::chrono::milliseconds SendRequest::getResolveTimeout() const {
-        return resolveTimeout;
+    [[maybe_unused]] std::chrono::milliseconds SendRequest::getResolveTimeout() const {
+        return pImpl->getResolveTimeout();
     }
 
-    std::chrono::milliseconds SendRequest::getAskTimeout() const {
-        return askTimeout;
+    [[maybe_unused]] std::chrono::milliseconds SendRequest::getAskTimeout() const {
+        return pImpl->getAskTimeout();
     }
 
-    IEventListener* SendRequest::getEventListener() const {
-        return eventListener;
+    [[maybe_unused]] IEventListener* SendRequest::getEventListener() const {
+        return pImpl->getEventListener();
     }
 
     bool SendRequest::execute() {
-        return send(receiverId, files, resolveTimeout, askTimeout, eventListener, deviceInfo);
+        return pImpl->execute();
     }
 }

@@ -6,6 +6,7 @@
  */
 
 #include "flowdrop/flowdrop.hpp"
+#include "core.h"
 #include "hv/HttpServer.h"
 #include "hv/hlog.h"
 #include <thread>
@@ -20,8 +21,8 @@
 
 class ReceiveProgressListener : public IProgressListener {
 public:
-    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, std::uint64_t totalSize) :
-            m_sender(std::move(sender)), m_eventListener(eventListener), m_totalSize(totalSize) {}
+    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, std::uint64_t totalSize, std::vector<FileInfo> *receivedFiles) :
+            m_sender(std::move(sender)), m_eventListener(eventListener), m_totalSize(totalSize), m_receivedFiles(receivedFiles) {}
 
     void totalProgress(std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
@@ -29,21 +30,22 @@ public:
         }
     }
 
-    void fileStart(char *fileName, std::uint64_t fileSize) override {
+    void fileStart(const FileInfo &fileInfo) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingFileStart(m_sender, {fileName, fileSize});
+            m_eventListener->onReceivingFileStart(m_sender, {fileInfo.name, fileInfo.size});
         }
     }
 
-    void fileProgress(char *fileName, std::uint64_t fileSize, std::uint64_t currentSize) override {
+    void fileProgress(const FileInfo &fileInfo, std::uint64_t currentSize) override {
         if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingFileProgress(m_sender, {fileName, fileSize}, currentSize);
+            m_eventListener->onReceivingFileProgress(m_sender, {fileInfo.name, fileInfo.size}, currentSize);
         }
     }
 
-    void fileEnd(char *fileName, std::uint64_t fileSize) override {
+    void fileEnd(const FileInfo &fileInfo) override {
+        m_receivedFiles->push_back(fileInfo);
         if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingFileEnd(m_sender, {fileName, fileSize});
+            m_eventListener->onReceivingFileEnd(m_sender, {fileInfo.name, fileInfo.size});
         }
     }
 
@@ -51,17 +53,14 @@ private:
     flowdrop::DeviceInfo m_sender;
     flowdrop::IEventListener *m_eventListener;
     std::uint64_t m_totalSize;
+    std::vector<FileInfo> *m_receivedFiles;
 };
 
 struct ReceiveSession {
     flowdrop::DeviceInfo sender{};
     VirtualTfaReader *tfa = nullptr;
     std::uint64_t totalSize{};
-};
-
-struct CachedSendRequest {
-    std::string host;
-    flowdrop::DeviceInfo deviceInfo;
+    std::vector<FileInfo> *receivedFiles = nullptr;
 };
 
 namespace flowdrop {
@@ -155,7 +154,6 @@ namespace flowdrop {
                         ctx->close();
                         return HTTP_STATUS_BAD_REQUEST;
                     }
-                    std::vector<flowdrop::FileInfo> receivedFiles;
                     std::filesystem::file_status destStatus = status(_destDir);
                     if (!exists(destStatus)) {
                         create_directories(_destDir);
@@ -163,11 +161,13 @@ namespace flowdrop {
                         std::cerr << "Destination path is not directory" << std::endl;
                         return HTTP_STATUS_INTERNAL_SERVER_ERROR;
                     }
-                    auto tfa = new VirtualTfaReader(_destDir, new ReceiveProgressListener(sender, _listener, totalSize));
+                    auto *receivedFiles = new std::vector<::FileInfo>;
+                    auto tfa = new VirtualTfaReader(_destDir, new ReceiveProgressListener(sender, _listener, totalSize, receivedFiles));
                     session = new ReceiveSession{
                             sender,
                             tfa,
-                            totalSize
+                            totalSize,
+                            receivedFiles
                     };
                     ctx->userdata = session;
                     if (_listener != nullptr) {
@@ -192,7 +192,11 @@ namespace flowdrop {
                     ctx->send();
                     if (session) {
                         if (_listener != nullptr) {
-                            _listener->onReceivingEnd(session->sender, session->totalSize);
+                            std::vector<FileInfo> receivedFiles;
+                            for (const ::FileInfo& fileInfo: *session->receivedFiles) {
+                                receivedFiles.push_back({fileInfo.name, fileInfo.size});
+                            }
+                            _listener->onReceivingEnd(session->sender, session->totalSize, receivedFiles);
                         }
 
                         delete session->tfa;
@@ -279,7 +283,7 @@ namespace flowdrop {
 
     Server::~Server() = default;
 
-    const DeviceInfo &Server::getDeviceInfo() const {
+    [[maybe_unused]] const DeviceInfo &Server::getDeviceInfo() const {
         return pImpl->_deviceInfo;
     }
 
@@ -287,7 +291,7 @@ namespace flowdrop {
         pImpl->_destDir = destDir;
     }
 
-    const std::filesystem::path &Server::getDestDir() const {
+    [[maybe_unused]] const std::filesystem::path &Server::getDestDir() const {
         return pImpl->_destDir;
     }
 
@@ -295,7 +299,7 @@ namespace flowdrop {
         pImpl->_askCallback = askCallback;
     }
 
-    const askCallback &Server::getAskCallback() const {
+    [[maybe_unused]] const askCallback &Server::getAskCallback() const {
         return pImpl->_askCallback;
     }
 
@@ -303,7 +307,7 @@ namespace flowdrop {
         pImpl->_listener = listener;
     }
 
-    IEventListener *Server::getEventListener() {
+    [[maybe_unused]] IEventListener *Server::getEventListener() {
         return pImpl->_listener;
     }
 

@@ -12,9 +12,8 @@
 #include <functional>
 #include <optional>
 #include <fstream>
-#include "nlohmann/json.hpp"
-
-using json = nlohmann::json;
+#include <chrono>
+#include <filesystem>
 
 namespace flowdrop {
     void setDebug(bool enabled);
@@ -23,34 +22,21 @@ namespace flowdrop {
 
     struct DeviceInfo {
         std::string id;
-        std::optional<std::string> uuid;
         std::optional<std::string> name;
         std::optional<std::string> model;
         std::optional<std::string> platform;
         std::optional<std::string> system_version;
     };
 
-    void to_json(json &j, const DeviceInfo &d);
-
-    void from_json(const json &j, DeviceInfo &d);
-
     struct FileInfo {
         std::string name;
         std::uint64_t size;
     };
 
-    void to_json(json &j, const FileInfo &d);
-
-    void from_json(const json &j, FileInfo &d);
-
     struct SendAsk {
         DeviceInfo sender;
         std::vector<FileInfo> files;
     };
-
-    void to_json(json &j, const SendAsk &d);
-
-    void from_json(const json &j, SendAsk &d);
 
     class IEventListener {
     public:
@@ -78,7 +64,7 @@ namespace flowdrop {
         virtual void onReceivingFileStart(const DeviceInfo &sender, const FileInfo &fileInfo) {}
         virtual void onReceivingFileProgress(const DeviceInfo &sender, const FileInfo &fileInfo, std::uint64_t receivedSize) {}
         virtual void onReceivingFileEnd(const DeviceInfo &sender, const FileInfo &fileInfo) {}
-        virtual void onReceivingEnd(const DeviceInfo &sender, std::uint64_t totalSize) {}
+        virtual void onReceivingEnd(const DeviceInfo &sender, std::uint64_t totalSize, const std::vector<FileInfo> &receivedFiles) {}
     };
 
     using askCallback = std::function<bool(const SendAsk &)>;
@@ -139,7 +125,7 @@ namespace flowdrop {
         [[maybe_unused]] [[nodiscard]] std::vector<File *> getFiles() const;
         SendRequest& setFiles(const std::vector<File *>& files);
 
-        [[maybe_unused]] [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getResolveTimeout() const;
+        [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getResolveTimeout() const;
         SendRequest &setResolveTimeout(const std::chrono::milliseconds &timeout);
 
         [[maybe_unused]] [[nodiscard]] std::chrono::milliseconds getAskTimeout() const;
@@ -151,12 +137,8 @@ namespace flowdrop {
         bool execute();
 
     private:
-        DeviceInfo deviceInfo;
-        std::string receiverId;
-        std::vector<File *> files;
-        std::chrono::milliseconds resolveTimeout;
-        std::chrono::milliseconds askTimeout;
-        IEventListener *eventListener;
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
     };
 
     class NativeFile : public File {
@@ -175,6 +157,6 @@ namespace flowdrop {
         class Impl;
         std::unique_ptr<Impl> pImpl;
     };
-}
+} // namespace flowdrop
 
 #endif //LIBFLOWDROP_FLOWDROP_HPP
