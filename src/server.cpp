@@ -265,6 +265,9 @@ namespace flowdrop {
                     _listener->onReceiverStarted(port);
                 }
             };
+            //int sockfd = Bind(port, "::", SOCK_STREAM);
+            //sockfd = ListenFD(sockfd);
+            //_server.setListenFD(sockfd, 0);
             _server.run(true);
         }
 

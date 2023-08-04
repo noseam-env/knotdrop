@@ -20,9 +20,9 @@ The source code is published under GPL-3.0 license with anti-commercial clause, 
 
 ## Third-party
 
-* libknotdnssd ([GPL-3.0](https://github.com/noseam-env/libknotdnssd/blob/master/LICENSE))
+* libknotdnssd ([GNU GPL v3](https://github.com/noseam-env/libknotdnssd/blob/master/LICENSE))
 * libvirtualtfa ([MIT License](https://github.com/noseam-env/libvirtualtfa/blob/master/LICENSE))
-* curl 8.1.1 ([curl License](https://curl.se/docs/copyright.html))
+* curl 8.2.1 ([curl License](https://curl.se/docs/copyright.html))
 * libhv 1.3.1 ([BSD 3-Clause License](https://github.com/ithewei/libhv/blob/v1.3.1/LICENSE))
 * nlohmann_json 3.11.2 ([MIT License](https://github.com/nlohmann/json/blob/v3.11.2/LICENSE.MIT))
 * Ninja ([Apache License 2.0](https://github.com/ninja-build/ninja/blob/master/COPYING))
