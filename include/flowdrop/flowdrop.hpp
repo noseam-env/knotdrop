@@ -5,8 +5,7 @@
  * https://github.com/noseam-env/libflowdrop/blob/master/LEGAL
  */
 
-#ifndef LIBFLOWDROP_FLOWDROP_HPP
-#define LIBFLOWDROP_FLOWDROP_HPP
+#pragma once
 
 #include <string> // string
 #include <functional> // function
@@ -16,6 +15,14 @@
 #include <vector> // vector
 
 namespace flowdrop {
+    // auto define pointer to implementation
+#define FLOWDROP_PRIVATE \
+private: \
+    class Impl; \
+    std::unique_ptr<Impl> pImpl;
+
+
+
     void setDebug(bool enabled);
 
     std::string generate_md5_id();
@@ -88,9 +95,7 @@ namespace flowdrop {
         void run();
         void stop();
 
-    private:
-        class Impl;
-        std::unique_ptr<Impl> pImpl;
+        FLOWDROP_PRIVATE
     };
 
     using discoverCallback = std::function<void(const DeviceInfo &)>;
@@ -136,9 +141,7 @@ namespace flowdrop {
 
         bool execute();
 
-    private:
-        class Impl;
-        std::unique_ptr<Impl> pImpl;
+        FLOWDROP_PRIVATE
     };
 
     class NativeFile : public File {
@@ -153,10 +156,10 @@ namespace flowdrop {
         void seek(std::uint64_t pos) override;
         std::uint64_t read(char *buffer, std::uint64_t count) override;
 
-    private:
-        class Impl;
-        std::unique_ptr<Impl> pImpl;
+        FLOWDROP_PRIVATE
     };
+
+
+
 } // namespace flowdrop
 
-#endif //LIBFLOWDROP_FLOWDROP_HPP
