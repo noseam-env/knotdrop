@@ -13,6 +13,7 @@
 #include "curl/curl.h"
 #include "logger.h"
 #include <set>
+#include <thread>
 
 size_t curl_write_function(void *contents, size_t size, size_t nmemb, std::string *output) {
     size_t totalSize = size * nmemb;
@@ -45,11 +46,6 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
             callback(std::nullopt);
             return;
         }
-#if defined(ANDROID)
-        bool useIPv4 = true;
-#else
-        bool useIPv4 = txt[flowdrop_txt_key_ipfamily] == "4";
-#endif
         unsigned short port = reply.port;
         if (reply.ip.has_value()) {
             const IPAddress &ip = reply.ip.value();
@@ -59,6 +55,11 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
         if (!reply.hostName.has_value()) {
             throw std::runtime_error("ip and hostName cannot be irrelevant at the same time");
         }
+#if defined(ANDROID)
+        bool useIPv4 = true;
+#else
+        bool useIPv4 = txt[flowdrop_txt_key_ipfamily] == "4";
+#endif
         const char *hostName = reply.hostName.value().c_str();
         queryCallback qCallback = [callback, port](const std::optional<IPAddress> &ipOpt){
             if (!ipOpt.has_value()) {
@@ -93,49 +94,52 @@ void flowdrop::discover(const flowdrop::discoverCallback &callback, const std::f
             const discovery::Remote &remote = remoteOpt.value();
             Logger::log(Logger::LEVEL_DEBUG, "fully resolved: " + remote.ip + " " + std::to_string(remote.port));
 
-            curl_global_init(CURL_GLOBAL_NOTHING);
+            std::thread fetchDeviceInfo([remote, callback](){
+                curl_global_init(CURL_GLOBAL_NOTHING);
 
-            CURL *curl = curl_easy_init();
-            if (!curl) {
-                Logger::log(Logger::LEVEL_ERROR, "Failed to initialize curl");
-                return;
-            }
+                CURL *curl = curl_easy_init();
+                if (!curl) {
+                    Logger::log(Logger::LEVEL_ERROR, "Failed to initialize curl");
+                    return;
+                }
 
-            std::string host = remote.ip;
-            if (remote.ipType == discovery::IPv6) {
-                host = "[" + host + "]";
-            }
-            std::string baseUrl = "http://" + host + ":" + std::to_string(remote.port) + "/";
+                std::string host = remote.ip;
+                if (remote.ipType == discovery::IPv6) {
+                    host = "[" + host + "]";
+                }
+                std::string baseUrl = "http://" + host + ":" + std::to_string(remote.port) + "/";
 
-            std::string url = baseUrl + "device_info";
-            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+                std::string url = baseUrl + "device_info";
+                curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+                curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 
-            std::string response;
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_function);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+                std::string response;
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_function);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-            CURLcode res = curl_easy_perform(curl);
-            if (res != CURLE_OK) {
-                Logger::log(Logger::LEVEL_DEBUG, "Failed to execute GET request: " + std::string(curl_easy_strerror(res)));
+                CURLcode res = curl_easy_perform(curl);
+                if (res != CURLE_OK) {
+                    Logger::log(Logger::LEVEL_DEBUG, "Failed to execute GET request: " + std::string(curl_easy_strerror(res)));
+                    curl_easy_cleanup(curl);
+                    curl_global_cleanup();
+                    return;
+                }
+
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return;
-            }
 
-            curl_easy_cleanup(curl);
-            curl_global_cleanup();
+                json jsonData;
+                try {
+                    jsonData = json::parse(response);
+                } catch (const std::exception &) {
+                    return;
+                }
+                DeviceInfo deviceInfo;
+                from_json(jsonData, deviceInfo);
 
-            json jsonData;
-            try {
-                jsonData = json::parse(response);
-            } catch (const std::exception &) {
-                return;
-            }
-            DeviceInfo deviceInfo;
-            from_json(jsonData, deviceInfo);
-
-            callback(deviceInfo);
+                callback(deviceInfo);
+            });
+            fetchDeviceInfo.detach();
         });
     }, isStopped);
 }
