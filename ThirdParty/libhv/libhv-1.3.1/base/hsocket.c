@@ -181,6 +181,7 @@ static int sockaddr_bind(sockaddr_u* localaddr, int type) {
         goto error;
     }
 
+#if !defined(ANDROID)
     // MODIFIED START
     int optval = 0;
     if (setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&optval, sizeof(optval)) < 0) {
@@ -188,6 +189,7 @@ static int sockaddr_bind(sockaddr_u* localaddr, int type) {
         goto error;
     }
     // MODIFIED END
+#endif
 
 #ifdef OS_UNIX
     so_reuseaddr(sockfd, 1);

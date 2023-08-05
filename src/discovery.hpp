@@ -8,7 +8,7 @@
 
 namespace discovery {
 
-    void announce(const std::string &id, unsigned short port, const std::function<bool()> &isStopped);
+    void announce(const std::string &id, unsigned short port, bool useIPv4, const std::function<bool()> &isStopped);
 
     enum IPType {
         IPv6,

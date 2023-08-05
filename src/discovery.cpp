@@ -20,9 +20,12 @@ size_t curl_write_function(void *contents, size_t size, size_t nmemb, std::strin
     return totalSize;
 }
 
-void discovery::announce(const std::string &id, unsigned short port, const std::function<bool()> &isStopped) {
+void discovery::announce(const std::string &id, unsigned short port, bool useIPv4, const std::function<bool()> &isStopped) {
     std::unordered_map<std::string, std::string> txt;
-    txt["v"] = std::to_string(flowdrop_version);
+    txt[flowdrop_txt_key_version] = std::to_string(flowdrop_version);
+    if (useIPv4) {
+        txt[flowdrop_txt_key_ipfamily] = "4";
+    }
     registerService(id.c_str(), flowdrop_reg_type, flowdrop_dns_domain, port, txt, isStopped);
 }
 
@@ -42,6 +45,11 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
             callback(std::nullopt);
             return;
         }
+#if defined(ANDROID)
+        bool useIPv4 = true;
+#else
+        bool useIPv4 = txt[flowdrop_txt_key_ipfamily] == "4";
+#endif
         unsigned short port = reply.port;
         if (reply.ip.has_value()) {
             const IPAddress &ip = reply.ip.value();
@@ -52,20 +60,19 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
             throw std::runtime_error("ip and hostName cannot be irrelevant at the same time");
         }
         const char *hostName = reply.hostName.value().c_str();
-        //bool fullyResolved = false;
-#if defined(ANDROID) // Android does not support IPv6
-        queryIPv4Address
-#else
-        queryIPv6Address
-#endif
-        (hostName, [callback, port](const std::optional<IPAddress> &ipOpt){
+        queryCallback qCallback = [callback, port](const std::optional<IPAddress> &ipOpt){
             if (!ipOpt.has_value()) {
                 callback(std::nullopt);
                 return;
             }
             const IPAddress &ip = ipOpt.value();
             callback({{convert(ip.type), ip.value, port}});
-        });
+        };
+        if (!useIPv4) {
+            queryIPv6Address(hostName, qCallback);
+        } else {
+            queryIPv4Address(hostName, qCallback);
+        }
     });
 }
 

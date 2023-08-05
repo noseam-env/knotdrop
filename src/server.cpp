@@ -247,14 +247,23 @@ namespace flowdrop {
             std::string id = _deviceInfo.id;
             _sdStop = new std::atomic<bool>(false);
             _sdThread = std::thread([&id, &port, this]() {
-                discovery::announce(id, port, [this](){
+#if !defined(ANDROID)
+                bool useIPv4 = false;
+#else
+                bool useIPv4 = true;
+#endif
+                discovery::announce(id, port, useIPv4, [this](){
                     return _sdStop->load();
                 });
             });
             _sdThread.detach();
 
             _server = hv::HttpServer(&router);
+#if !defined(ANDROID)
             _server.setHost("::");
+#else
+            _server.setHost("0.0.0.0");
+#endif
             _server.setPort(port);
             _server.setThreadNum(3);
             bool started = false;
