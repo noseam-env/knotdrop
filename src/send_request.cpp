@@ -119,46 +119,50 @@ private:
 
 class FileAdapter : public VirtualFile {
 public:
-    explicit FileAdapter(flowdrop::File *file) : m_file(file) {}
+    explicit FileAdapter(flowdrop::File *file) : _file(file) {}
     ~FileAdapter() override = default;
 
     [[nodiscard]] std::string getRelativePath() const override {
-        return m_file->getRelativePath();
+        return _file->getRelativePath();
     }
     [[nodiscard]] std::uint64_t getSize() const override {
-        return m_file->getSize();
+        return _file->getSize();
     }
     [[nodiscard]] std::uint64_t getCreatedTime() const override {
-        return m_file->getCreatedTime();
+        return _file->getCreatedTime();
     }
     [[nodiscard]] std::uint64_t getModifiedTime() const override {
-        return m_file->getModifiedTime();
+        return _file->getModifiedTime();
     }
     [[nodiscard]] std::filesystem::perms getPermissions() const override {
-        return m_file->getPermissions();
+        return _file->getPermissions();
     }
     void seek(std::uint64_t pos) override {
-        m_file->seek(pos);
+        _file->seek(pos);
     }
     std::uint64_t read(char* buffer, std::uint64_t count) override {
-        return m_file->read(buffer, count);
+        return _file->read(buffer, count);
     }
 
 private:
-    flowdrop::File *m_file;
+    flowdrop::File *_file;
 };
 
 void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files, flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
     VirtualTfaArchive *archive = virtual_tfa_archive_new();
 
+    std::vector<std::unique_ptr<FileAdapter>> fileAdapters;
     for (flowdrop::File *file: files) {
-        FileAdapter fileAdapter(file);
-        VirtualTfaEntry *entry = virtual_tfa_entry_new(fileAdapter);
+        fileAdapters.push_back(std::unique_ptr<FileAdapter>(new FileAdapter(file)));
+    }
+
+    for (std::unique_ptr<FileAdapter> &fileAdapter: fileAdapters) {
+        VirtualTfaEntry *entry = virtual_tfa_entry_new(*fileAdapter);
         virtual_tfa_archive_add(archive, entry);
     }
 
-    auto *sendProgressListener = new SendProgressListener(listener);
-    auto *tfa = new VirtualTfaWriter(archive, sendProgressListener);
+    auto sendProgressListener = std::make_unique<SendProgressListener>(listener);
+    auto tfa = std::make_unique<VirtualTfaWriter>(archive, sendProgressListener.get());
 
     std::uint64_t totalSize = tfa->calcSize();
     sendProgressListener->setTotalSize(totalSize);
@@ -170,28 +174,33 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
     curl_global_init(CURL_GLOBAL_NOTHING);
 
     CURL *curl = curl_easy_init();
-    if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, (baseUrl + flowdrop_endpoint_send).c_str());
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_READDATA, tfa);
-        curl_easy_setopt(curl, CURLOPT_READFUNCTION, tfaReadFunction);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, totalSize);
-
-        struct curl_slist *headers = nullptr;
-        std::string header = std::string(flowdrop_deviceinfo_header) + ": " + json(deviceInfo).dump();
-        headers = curl_slist_append(headers, header.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ignoreDataCallback);
-
-        CURLcode res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            Logger::log(Logger::LEVEL_ERROR, "Send file error: " + std::string(curl_easy_strerror(res)));
-        }
-
-        curl_easy_cleanup(curl);
-        curl_global_cleanup();
+    if (!curl) {
+        virtual_tfa_archive_close(archive);
+        Logger::log(Logger::LEVEL_ERROR, "Failed to initialize curl");
+        return;
     }
+
+    curl_easy_setopt(curl, CURLOPT_URL, (baseUrl + flowdrop_endpoint_send).c_str());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_READDATA, tfa.get());
+    curl_easy_setopt(curl, CURLOPT_READFUNCTION, tfaReadFunction);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, totalSize);
+
+    std::string header = std::string(flowdrop_deviceinfo_header) + ": " + json(deviceInfo).dump();
+    struct curl_slist *headers = nullptr;
+    headers = curl_slist_append(headers, header.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ignoreDataCallback);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        Logger::log(Logger::LEVEL_ERROR, "Send file error: " + std::string(curl_easy_strerror(res)));
+    }
+
+    curl_easy_cleanup(curl);
+
+    curl_global_cleanup();
 
     virtual_tfa_archive_close(archive);
 }

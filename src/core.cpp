@@ -108,9 +108,11 @@ namespace flowdrop {
 
     class NativeFile::Impl {
     public:
-        Impl(std::filesystem::path filePath, std::string relativePath) : _filePath(std::move(filePath)), _relativePath(std::move(relativePath)) {
-            _fileStream.open(_filePath, std::ios::binary | std::ios::in);
-            if (!_fileStream.is_open()) {
+        Impl(std::filesystem::path filePath, std::string relativePath) :
+                _filePath(std::move(filePath)),
+                _relativePath(std::move(relativePath)),
+                _fileStream(_filePath, std::ios::binary | std::ios::in) {
+            if (!_fileStream) {
                 throw std::runtime_error("Error opening file: " + _filePath.string());
             }
             ::FileInfo::Time(_filePath.string(), &_createdTime, &_modifiedTime);
@@ -121,12 +123,7 @@ namespace flowdrop {
                 _modifiedTime = _createdTime;
             }
         }
-
-        ~Impl() {
-            if (_fileStream.is_open()) {
-                _fileStream.close();
-            }
-        }
+        ~Impl() = default;
 
         [[nodiscard]] std::string getRelativePath() const {
             return _relativePath;
@@ -149,12 +146,12 @@ namespace flowdrop {
         }
 
         void seek(std::uint64_t pos) {
-            _fileStream.seekg(static_cast<std::streamoff>(pos));
+            _fileStream.seekg(static_cast<std::ifstream::pos_type>(pos));
         }
 
         std::uint64_t read(char *buffer, std::uint64_t count) {
             _fileStream.read(buffer, static_cast<std::streamsize>(count));
-            return _fileStream.gcount();
+            return static_cast<std::uint64_t>(_fileStream.gcount());
         }
 
     private:
