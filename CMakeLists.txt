@@ -40,6 +40,7 @@ set(LIBFLOWDROP_PRIVATE_LIBS
 
 if(ANDROID)
     list(APPEND LIBFLOWDROP_PRIVATE_LIBS log)
+    set(LIBFLOWDROP_DEFS ${LIBFLOWDROP_DEFS} IPV6_NOT_SUPPORTED)
 endif ()
 
 set(LIBFLOWDROP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -61,18 +62,6 @@ add_subdirectory(ThirdParty/nlohmann_json)
 if (WIN32)
     option(BUILD_FOR_MT "build for /MT" OFF)
     if (BUILD_FOR_MT)
-        # MultiThreaded
-        # Compile with -MT or equivalent flag(s) to use a multi-threaded statically-linked runtime library.
-        #
-        # MultiThreadedDLL
-        # Compile with -MD or equivalent flag(s) to use a multi-threaded dynamically-linked runtime library.
-        #
-        # MultiThreadedDebug
-        # Compile with -MTd or equivalent flag(s) to use a multi-threaded statically-linked runtime library.
-        #
-        # MultiThreadedDebugDLL
-        # Compile with -MDd or equivalent flag(s) to use a multi-threaded dynamically-linked runtime library.
-
         set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
         set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
@@ -89,12 +78,14 @@ endif ()
 
 if (LIBFLOWDROP_BUILD_SHARED)
     add_library(libflowdrop_shared SHARED ${LIBFLOWDROP_SOURCES})
+    target_compile_definitions(libflowdrop_shared PRIVATE ${LIBFLOWDROP_DEFS})
     target_include_directories(libflowdrop_shared PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_shared PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
     target_link_libraries(libflowdrop_shared PRIVATE ${LIBFLOWDROP_PRIVATE_LIBS})
 endif ()
 if (LIBFLOWDROP_BUILD_STATIC)
     add_library(libflowdrop_static STATIC ${LIBFLOWDROP_SOURCES})
+    target_compile_definitions(libflowdrop_static PRIVATE ${LIBFLOWDROP_DEFS})
     target_include_directories(libflowdrop_static PUBLIC ${LIBFLOWDROP_INCLUDE_DIR})
     target_include_directories(libflowdrop_static PRIVATE ${LIBFLOWDROP_TARGET_INCLUDE})
     target_link_libraries(libflowdrop_static PRIVATE ${LIBFLOWDROP_PRIVATE_LIBS})

@@ -8,4 +8,4 @@ option(BUILD_EXAMPLES "" OFF)
 option(WITH_HTTP_CLIENT "" OFF)
 option(WITH_MQTT "" OFF)
 
-add_subdirectory(libhv-1.3.1)
+add_subdirectory(libhv)

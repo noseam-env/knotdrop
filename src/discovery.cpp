@@ -55,7 +55,7 @@ void discovery::resolveAndQuery(const std::string &id, const resolveCallback &ca
         if (!reply.hostName.has_value()) {
             throw std::runtime_error("ip and hostName cannot be irrelevant at the same time");
         }
-#if defined(ANDROID)
+#if defined(IPV6_NOT_SUPPORTED)
         bool useIPv4 = true;
 #else
         bool useIPv4 = txt[flowdrop_txt_key_ipfamily] == "4";
