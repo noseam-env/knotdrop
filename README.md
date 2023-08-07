@@ -8,9 +8,7 @@ The source code is published under GPL-3.0 license with anti-commercial clause, 
 
 #### TODO:
 
-- Add Windows ARM support (need to build Bonjour SDK for it)
-- Add support for mobile operating systems
-- Make a C header (currently has a C++ header)
+- Add Windows ARM64 support (required to build own Bonjour for it)
 
 
 ## Authors
