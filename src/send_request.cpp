@@ -13,7 +13,7 @@
 #include <thread>
 #include <future>
 #include "specification.h"
-#include "virtualtfa.hpp"
+#include "virtualtfa.h"
 #include "discovery.hpp"
 #include "logger.h"
 
@@ -75,97 +75,166 @@ size_t ignoreDataCallback(char * /*buffer*/, size_t size, size_t nmemb, void * /
     return size * nmemb;
 }
 
-size_t tfaReadFunction(char *buffer, size_t size, size_t nmemb, void *userdata) {
-    auto *tfa = static_cast<VirtualTfaWriter *>(userdata);
-    return tfa->writeTo(buffer, size * nmemb);
+size_t tfaWriterReadFunc(char *buffer, size_t size, size_t nmemb, void *userdata) {
+    auto *tfa = static_cast<virtual_tfa_writer *>(userdata);
+    size_t bytes_written = 0;
+    int result = virtual_tfa_writer_write(tfa, buffer, size * nmemb, &bytes_written);
+    if (result != 0) {
+        Logger::log(Logger::LEVEL_ERROR, "failed to read archive, code: " + std::to_string(result));
+    }
+    return bytes_written;
 }
 
-class SendProgressListener : public IProgressListener {
+class SendProgressListener {
 public:
-    explicit SendProgressListener(flowdrop::IEventListener *eventListener) : m_eventListener(eventListener) {}
+    explicit SendProgressListener(flowdrop::IEventListener *eventListener) : _eventListener(eventListener) {}
 
-    void totalProgress(std::uint64_t currentSize) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onSendingTotalProgress(m_totalSize, currentSize);
+    void totalProgress(tfa_size_t currentSize) {
+        if (_eventListener != nullptr) {
+            _eventListener->onSendingTotalProgress(_totalSize, currentSize);
         }
     }
 
-    void fileStart(const FileInfo &fileInfo) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileStart({fileInfo.name, fileInfo.size});
+    void fileStart(const virtual_tfa_file_info *fileInfo) {
+        if (_eventListener != nullptr) {
+            _eventListener->onSendingFileStart({fileInfo->name, fileInfo->size});
         }
     }
 
-    void fileProgress(const FileInfo &fileInfo, std::uint64_t currentSize) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileProgress({fileInfo.name, fileInfo.size}, currentSize);
+    void fileProgress(const virtual_tfa_file_info *fileInfo, tfa_size_t currentSize) {
+        if (_eventListener != nullptr) {
+            _eventListener->onSendingFileProgress({fileInfo->name, fileInfo->size}, currentSize);
         }
     }
 
-    void fileEnd(const FileInfo &fileInfo) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onSendingFileEnd({fileInfo.name, fileInfo.size});
+    void fileEnd(const virtual_tfa_file_info *fileInfo) {
+        if (_eventListener != nullptr) {
+            _eventListener->onSendingFileEnd({fileInfo->name, fileInfo->size});
         }
     }
 
-    void setTotalSize(std::uint64_t totalSize) {
-        SendProgressListener::m_totalSize = totalSize;
+    void setTotalSize(tfa_size_t totalSize) {
+        _totalSize = totalSize;
     }
 
 private:
-    flowdrop::IEventListener *m_eventListener;
-    std::uint64_t m_totalSize = 0;
+    flowdrop::IEventListener *_eventListener;
+    tfa_size_t _totalSize = 0;
 };
 
-class FileAdapter : public VirtualFile {
-public:
-    explicit FileAdapter(flowdrop::File *file) : _file(file) {}
-    ~FileAdapter() override = default;
-
-    [[nodiscard]] std::string getRelativePath() const override {
-        return _file->getRelativePath();
-    }
-    [[nodiscard]] std::uint64_t getSize() const override {
-        return _file->getSize();
-    }
-    [[nodiscard]] std::uint64_t getCreatedTime() const override {
-        return _file->getCreatedTime();
-    }
-    [[nodiscard]] std::uint64_t getModifiedTime() const override {
-        return _file->getModifiedTime();
-    }
-    [[nodiscard]] std::filesystem::perms getPermissions() const override {
-        return _file->getPermissions();
-    }
-    void seek(std::uint64_t pos) override {
-        _file->seek(pos);
-    }
-    std::uint64_t read(char* buffer, std::uint64_t count) override {
-        return _file->read(buffer, count);
+namespace send_request_listener {
+    void total_progress(void *userdata, tfa_size_t currentSize) {
+        auto *listener = static_cast<SendProgressListener *>(userdata);
+        listener->totalProgress(currentSize);
     }
 
-private:
-    flowdrop::File *_file;
-};
+    void file_start(void *userdata, const virtual_tfa_file_info *fileInfo) {
+        auto *listener = static_cast<SendProgressListener *>(userdata);
+        listener->fileStart(fileInfo);
+    }
+
+    void file_progress(void *userdata, const virtual_tfa_file_info *fileInfo, tfa_size_t currentSize) {
+        auto *listener = static_cast<SendProgressListener *>(userdata);
+        listener->fileProgress(fileInfo, currentSize);
+    }
+
+    void file_end(void *userdata, const virtual_tfa_file_info *fileInfo) {
+        auto *listener = static_cast<SendProgressListener *>(userdata);
+        listener->fileEnd(fileInfo);
+    }
+}
+
+tfa_size_t streamReadFunc(void *userdata, char *buffer, tfa_size_t size) {
+    auto *file = static_cast<flowdrop::File *>(userdata);
+    return file->read(buffer, size);
+}
+
+void streamCloseFunc(void *userdata) {
+    auto *file = static_cast<flowdrop::File *>(userdata);
+    delete file;
+}
+
+virtual_tfa_input_stream *streamSupplier(void *userdata) {
+    virtual_tfa_input_stream *input_stream = virtual_tfa_input_stream_new();
+
+    virtual_tfa_input_stream_set_read_function(input_stream, streamReadFunc);
+    virtual_tfa_input_stream_set_read_userdata(input_stream, userdata);
+    virtual_tfa_input_stream_set_close_function(input_stream, streamCloseFunc);
+    virtual_tfa_input_stream_set_close_userdata(input_stream, userdata);
+
+    return input_stream;
+}
 
 void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files, flowdrop::IEventListener *listener, const flowdrop::DeviceInfo &deviceInfo) {
-    VirtualTfaArchive *archive = virtual_tfa_archive_new();
+    virtual_tfa_archive *tfa_archive = virtual_tfa_archive_new();
+    if (!tfa_archive) {
+        Logger::log(Logger::LEVEL_ERROR, "Failed to initialize virtual_tfa_archive");
+        return;
+    }
 
-    std::vector<std::unique_ptr<FileAdapter>> fileAdapters;
     for (flowdrop::File *file: files) {
-        fileAdapters.push_back(std::unique_ptr<FileAdapter>(new FileAdapter(file)));
+        virtual_tfa_entry *entry = virtual_tfa_entry_new();
+        if (!entry) {
+            Logger::log(Logger::LEVEL_ERROR, "Failed to initialize virtual_tfa_entry");
+            virtual_tfa_archive_free(tfa_archive);
+            return;
+        }
+
+        const std::string& relativePath = file->getRelativePath();
+        const char* name = relativePath.c_str();
+
+        char* nameBuffer = new char[1024];
+        strcpy(nameBuffer, name);
+
+        virtual_tfa_entry_set_name(entry, nameBuffer);
+
+        virtual_tfa_entry_set_size(entry, file->getSize());
+        virtual_tfa_entry_set_input_stream_supplier(entry, streamSupplier);
+        virtual_tfa_entry_set_input_stream_supplier_userdata(entry, file);
+        virtual_tfa_entry_set_ctime(entry, file->getCreatedTime());
+        virtual_tfa_entry_set_mtime(entry, file->getModifiedTime());
+        virtual_tfa_entry_set_mode(entry, static_cast<tfa_mode_t>(file->getPermissions()));
+
+        virtual_tfa_archive_add(tfa_archive, entry);
     }
 
-    for (std::unique_ptr<FileAdapter> &fileAdapter: fileAdapters) {
-        VirtualTfaEntry *entry = virtual_tfa_entry_new(*fileAdapter);
-        virtual_tfa_archive_add(archive, entry);
+    SendProgressListener *progressListener;
+    virtual_tfa_listener *tfa_listener;
+    if (listener != nullptr) {
+        progressListener = new SendProgressListener(listener);
+        void *userdata = static_cast<void *>(progressListener);
+
+        tfa_listener = new virtual_tfa_listener{
+            send_request_listener::total_progress,
+            userdata,
+            send_request_listener::file_start,
+            userdata,
+            send_request_listener::file_progress,
+            userdata,
+            send_request_listener::file_end,
+            userdata
+        };
+    } else {
+        progressListener = nullptr;
+        tfa_listener = nullptr;
     }
 
-    auto sendProgressListener = std::make_unique<SendProgressListener>(listener);
-    auto tfa = std::make_unique<VirtualTfaWriter>(archive, sendProgressListener.get());
+    virtual_tfa_writer *tfa_writer = virtual_tfa_writer_new();
+    if (!tfa_writer) {
+        Logger::log(Logger::LEVEL_ERROR, "Failed to initialize virtual_tfa_writer");
+        virtual_tfa_archive_free(tfa_archive);
+        return;
+    }
 
-    std::uint64_t totalSize = tfa->calcSize();
-    sendProgressListener->setTotalSize(totalSize);
+    virtual_tfa_writer_set_archive(tfa_writer, tfa_archive);
+    virtual_tfa_writer_set_listener(tfa_writer, tfa_listener);
+
+    tfa_size_t totalSize = virtual_tfa_writer_calc_size(tfa_writer);
+    Logger::log(Logger::LEVEL_DEBUG, "tfa size: " + std::to_string(totalSize));
+
+    if (progressListener != nullptr) {
+        progressListener->setTotalSize(totalSize);
+    }
 
     if (listener != nullptr) {
         listener->onSendingStart();
@@ -175,15 +244,18 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
 
     CURL *curl = curl_easy_init();
     if (!curl) {
-        virtual_tfa_archive_close(archive);
+        virtual_tfa_writer_free(tfa_writer);
+        virtual_tfa_archive_free(tfa_archive);
+        delete tfa_listener;
+        delete progressListener;
         Logger::log(Logger::LEVEL_ERROR, "Failed to initialize curl");
         return;
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, (baseUrl + flowdrop_endpoint_send).c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_READDATA, tfa.get());
-    curl_easy_setopt(curl, CURLOPT_READFUNCTION, tfaReadFunction);
+    curl_easy_setopt(curl, CURLOPT_READDATA, tfa_writer);
+    curl_easy_setopt(curl, CURLOPT_READFUNCTION, tfaWriterReadFunc);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, totalSize);
 
     std::string header = std::string(flowdrop_deviceinfo_header) + ": " + json(deviceInfo).dump();
@@ -202,7 +274,11 @@ void sendFiles(const std::string &baseUrl, std::vector<flowdrop::File *> &files,
 
     curl_global_cleanup();
 
-    virtual_tfa_archive_close(archive);
+    virtual_tfa_writer_free(tfa_writer);
+    virtual_tfa_archive_free(tfa_archive);
+
+    delete tfa_listener;
+    delete progressListener;
 }
 
 bool askAndSend(const discovery::Remote &remote, std::vector<flowdrop::File *> &files, const std::chrono::milliseconds askTimeout,

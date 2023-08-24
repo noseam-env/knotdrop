@@ -16,51 +16,73 @@
 #include "portroller.hpp"
 #include "discovery.hpp"
 #include "specification.h"
-#include "virtualtfa.hpp"
+#include "virtualtfa.h"
 #include "logger.h"
 
-class ReceiveProgressListener : public IProgressListener {
+class ReceiveProgressListener {
 public:
-    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, std::uint64_t totalSize, std::vector<FileInfo> *receivedFiles) :
-            m_sender(std::move(sender)), m_eventListener(eventListener), m_totalSize(totalSize), m_receivedFiles(receivedFiles) {}
+    ReceiveProgressListener(flowdrop::DeviceInfo sender, flowdrop::IEventListener *eventListener, tfa_size_t totalSize, std::vector<const virtual_tfa_file_info *> *receivedFiles) :
+            _sender(std::move(sender)), _eventListener(eventListener), _totalSize(totalSize), _receivedFiles(receivedFiles) {}
 
-    void totalProgress(std::uint64_t currentSize) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingTotalProgress(m_sender, m_totalSize, currentSize);
+    void totalProgress(tfa_size_t currentSize) {
+        if (_eventListener != nullptr) {
+            _eventListener->onReceivingTotalProgress(_sender, _totalSize, currentSize);
         }
     }
 
-    void fileStart(const FileInfo &fileInfo) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingFileStart(m_sender, {fileInfo.name, fileInfo.size});
+    void fileStart(const virtual_tfa_file_info *fileInfo) {
+        if (_eventListener != nullptr) {
+            _eventListener->onReceivingFileStart(_sender, {fileInfo->name, fileInfo->size});
         }
     }
 
-    void fileProgress(const FileInfo &fileInfo, std::uint64_t currentSize) override {
-        if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingFileProgress(m_sender, {fileInfo.name, fileInfo.size}, currentSize);
+    void fileProgress(const virtual_tfa_file_info *fileInfo, tfa_size_t currentSize) {
+        if (_eventListener != nullptr) {
+            _eventListener->onReceivingFileProgress(_sender, {fileInfo->name, fileInfo->size}, currentSize);
         }
     }
 
-    void fileEnd(const FileInfo &fileInfo) override {
-        m_receivedFiles->push_back(fileInfo);
-        if (m_eventListener != nullptr) {
-            m_eventListener->onReceivingFileEnd(m_sender, {fileInfo.name, fileInfo.size});
+    void fileEnd(const virtual_tfa_file_info *fileInfo) {
+        _receivedFiles->push_back(fileInfo);
+        if (_eventListener != nullptr) {
+            _eventListener->onReceivingFileEnd(_sender, {fileInfo->name, fileInfo->size});
         }
     }
 
 private:
-    flowdrop::DeviceInfo m_sender;
-    flowdrop::IEventListener *m_eventListener;
-    std::uint64_t m_totalSize;
-    std::vector<FileInfo> *m_receivedFiles;
+    flowdrop::DeviceInfo _sender;
+    flowdrop::IEventListener *_eventListener;
+    tfa_size_t _totalSize;
+    std::vector<const virtual_tfa_file_info *> *_receivedFiles;
 };
+
+namespace server_listener {
+    void total_progress(void *userdata, tfa_size_t currentSize) {
+        auto *listener = static_cast<ReceiveProgressListener *>(userdata);
+        listener->totalProgress(currentSize);
+    }
+
+    void file_start(void *userdata, const virtual_tfa_file_info *fileInfo) {
+        auto *listener = static_cast<ReceiveProgressListener *>(userdata);
+        listener->fileStart(fileInfo);
+    }
+
+    void file_progress(void *userdata, const virtual_tfa_file_info *fileInfo, tfa_size_t currentSize) {
+        auto *listener = static_cast<ReceiveProgressListener *>(userdata);
+        listener->fileProgress(fileInfo, currentSize);
+    }
+
+    void file_end(void *userdata, const virtual_tfa_file_info *fileInfo) {
+        auto *listener = static_cast<ReceiveProgressListener *>(userdata);
+        listener->fileEnd(fileInfo);
+    }
+}
 
 struct ReceiveSession {
     flowdrop::DeviceInfo sender{};
-    VirtualTfaReader *tfa = nullptr;
-    std::uint64_t totalSize{};
-    std::vector<FileInfo> *receivedFiles = nullptr;
+    virtual_tfa_reader *tfa_reader = nullptr;
+    tfa_size_t totalSize = 0;
+    std::vector<const virtual_tfa_file_info *> *receivedFiles = nullptr;
 };
 
 namespace flowdrop {
@@ -158,14 +180,40 @@ namespace flowdrop {
                     if (!exists(destStatus)) {
                         create_directories(_destDir);
                     } else if (!is_directory(destStatus)) {
-                        std::cerr << "Destination path is not directory" << std::endl;
+                        Logger::log(Logger::LEVEL_ERROR, "Destination path is not directory");
                         return HTTP_STATUS_INTERNAL_SERVER_ERROR;
                     }
-                    auto *receivedFiles = new std::vector<::FileInfo>;
-                    auto tfa = new VirtualTfaReader(_destDir, new ReceiveProgressListener(sender, _listener, totalSize, receivedFiles));
+                    auto *receivedFiles = new std::vector<const virtual_tfa_file_info *>;
+                    virtual_tfa_reader *tfa_reader = virtual_tfa_reader_new();
+                    if (!tfa_reader) {
+                        Logger::log(Logger::LEVEL_ERROR, "Failed to initialize virtual_tfa_reader");
+                        return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+                    }
+
+                    std::string destStr = _destDir.u8string();
+                    const char* dest = destStr.c_str();
+
+                    char* destBuffer = new char[1024];
+                    strcpy(destBuffer, dest);
+
+                    virtual_tfa_reader_set_dest(tfa_reader, destBuffer);
+
+                    auto *cppListener = static_cast<void *>(new ReceiveProgressListener(sender, _listener, totalSize, receivedFiles));
+                    auto *tfaListener = new virtual_tfa_listener{
+                            server_listener::total_progress,
+                            cppListener,
+                            server_listener::file_start,
+                            cppListener,
+                            server_listener::file_progress,
+                            cppListener,
+                            server_listener::file_end,
+                            cppListener
+                    };
+                    virtual_tfa_reader_set_listener(tfa_reader, tfaListener);
+
                     session = new ReceiveSession{
                             sender,
-                            tfa,
+                            tfa_reader,
                             totalSize,
                             receivedFiles
                     };
@@ -177,9 +225,14 @@ namespace flowdrop {
                     break;
                 case HP_BODY: {
                     if (session && data && size) {
-                        if (session->tfa->addReadData(const_cast<char *>(data), size) != size) {
-                            ctx->close();
-                            return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+                        if (session->tfa_reader) {
+                            tfa_size_t bytes_read = 0;
+                            int result = virtual_tfa_reader_read(session->tfa_reader, const_cast<char *>(data), size, &bytes_read);
+                            if (result != 0 || bytes_read != size) {
+                                Logger::log(Logger::LEVEL_ERROR, "Reading error, code: " + std::to_string(result));
+                                ctx->close();
+                                return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+                            }
                         }
                     }
                 }
@@ -193,13 +246,18 @@ namespace flowdrop {
                     if (session) {
                         if (_listener != nullptr) {
                             std::vector<FileInfo> receivedFiles;
-                            for (const ::FileInfo& fileInfo: *session->receivedFiles) {
-                                receivedFiles.push_back({fileInfo.name, fileInfo.size});
+                            for (const virtual_tfa_file_info *fileInfo: *session->receivedFiles) {
+                                receivedFiles.push_back({fileInfo->name, fileInfo->size});
+                                // TODO: clean memory from files info
+                                // free((void *) fileInfo);
                             }
                             _listener->onReceivingEnd(session->sender, session->totalSize, receivedFiles);
                         }
 
-                        delete session->tfa;
+                        if (session->tfa_reader) {
+                            virtual_tfa_reader_free(session->tfa_reader);
+                            session->tfa_reader = nullptr;
+                        }
                         delete session;
                         ctx->userdata = nullptr;
                     }
@@ -207,7 +265,10 @@ namespace flowdrop {
                     break;
                 case HP_ERROR: {
                     if (session) {
-                        delete session->tfa;
+                        if (session->tfa_reader) {
+                            virtual_tfa_reader_free(session->tfa_reader);
+                            session->tfa_reader = nullptr;
+                        }
                         delete session;
                         ctx->userdata = nullptr;
                     }
