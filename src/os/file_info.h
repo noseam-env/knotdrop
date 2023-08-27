@@ -6,10 +6,15 @@
  */
 #pragma once
 
-#include <cstdint>
-#include <string>
-#include <stdexcept>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace FileInfo {
-    void Time(const std::string &filePath, std::uint64_t *ctime, std::uint64_t *mtime);
-}
+#include <stdint.h>
+#include <stdio.h>
+
+int knotdrop_util_fileinfo(const char *filePath, uint64_t *ctime, uint64_t *mtime);
+
+#ifdef __cplusplus
+} /* end of extern "C" */
+#endif

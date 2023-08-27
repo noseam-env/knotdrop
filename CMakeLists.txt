@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 cmake_policy(SET CMP0077 NEW)
 
-project(libflowdrop LANGUAGES CXX)
+project(libflowdrop LANGUAGES C CXX)
 
 option(LIBFLOWDROP_BUILD_STATIC "BUILD STATIC LIBRARIES" ON)
 option(LIBFLOWDROP_BUILD_SHARED "BUILD SHARED LIBRARIES" ON)
@@ -16,7 +16,7 @@ option(ENABLE_KNOT_DNSSD "ENABLE KNOT DNS-SD" ON)
 set(CMAKE_CXX_STANDARD 17)
 
 set(LIBFLOWDROP_SOURCES
-        src/os/file_info.cpp
+        src/os/file_info.c
         src/os/file_info.h
         src/os/experimental_socket.cpp
         src/os/experimental_socket.cpp

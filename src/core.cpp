@@ -115,7 +115,12 @@ namespace flowdrop {
             if (!_fileStream) {
                 throw std::runtime_error("Error opening file: " + _filePath.string());
             }
-            ::FileInfo::Time(_filePath.string(), &_createdTime, &_modifiedTime);
+            int result = knotdrop_util_fileinfo(_filePath.string().c_str(), &_createdTime, &_modifiedTime);
+            if (result == 1) {
+                Logger::log(Logger::LEVEL_ERROR, "knotdrop_util_fileinfo: error opening file");
+            } else if (result == 2) {
+                Logger::log(Logger::LEVEL_ERROR, "knotdrop_util_fileinfo: error getting file time");
+            }
             if (_createdTime == 0) {
                 _createdTime = std::time(nullptr);
             }

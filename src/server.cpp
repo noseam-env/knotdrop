@@ -43,7 +43,17 @@ public:
     }
 
     void fileEnd(const virtual_tfa_file_info *fileInfo) {
-        _receivedFiles->push_back(fileInfo);
+        virtual_tfa_file_info *copiedFileInfo = (virtual_tfa_file_info *)malloc(sizeof(virtual_tfa_file_info));
+        if (copiedFileInfo) {
+            char *copied_name = (char *)malloc(strlen(fileInfo->name) + 1);
+            strcpy(copied_name, fileInfo->name);
+            copiedFileInfo->name = copied_name;
+            copiedFileInfo->size = fileInfo->size;
+            copiedFileInfo->ctime = fileInfo->ctime;
+            copiedFileInfo->mtime = fileInfo->mtime;
+            copiedFileInfo->mode = fileInfo->mode;
+            _receivedFiles->push_back(copiedFileInfo);
+        }
         if (_eventListener != nullptr) {
             _eventListener->onReceivingFileEnd(_sender, {fileInfo->name, fileInfo->size});
         }
