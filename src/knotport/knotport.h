@@ -6,4 +6,14 @@
  */
 #pragma once
 
-unsigned short rollAvailablePort(unsigned short defaultPort);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef unsigned short port_t;
+
+port_t knotport_find_open();
+
+#ifdef __cplusplus
+} /* end of extern "C" */
+#endif

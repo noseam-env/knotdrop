@@ -16,18 +16,16 @@ option(ENABLE_KNOT_DNSSD "ENABLE KNOT DNS-SD" ON)
 set(CMAKE_CXX_STANDARD 17)
 
 set(LIBFLOWDROP_SOURCES
+        src/knotport/knotport.c
+        src/knotport/knotport.h
         src/os/file_info.c
         src/os/file_info.h
-        src/os/experimental_socket.cpp
-        src/os/experimental_socket.cpp
         src/core.cpp
         src/core.h
         src/discovery.cpp
         src/discovery.hpp
         src/logger.cpp
         src/logger.h
-        src/portroller.cpp
-        src/portroller.hpp
         src/send_request.cpp
         src/server.cpp
         src/specification.h)

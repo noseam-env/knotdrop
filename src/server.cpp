@@ -13,7 +13,7 @@
 #include <set>
 #include <utility>
 #include <atomic>
-#include "portroller.hpp"
+#include "knotport/knotport.h"
 #include "discovery.hpp"
 #include "specification.h"
 #include "virtualtfa.h"
@@ -291,7 +291,10 @@ namespace flowdrop {
         }
 
         void run() {
-            unsigned short port = rollAvailablePort(flowdrop_default_port);
+            port_t port = knotport_find_open();
+            if (port == 0) {
+                throw new std::runtime_error("unable to find free port");
+            }
             Logger::log(Logger::LEVEL_DEBUG, "server port: " + std::to_string(port));
 
             std::string slash = "/";
